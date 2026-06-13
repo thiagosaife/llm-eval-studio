@@ -1,0 +1,14 @@
+# Phase 1 — light, pure-Python metrics (no model downloads).
+fastapi>=0.110
+uvicorn>=0.27
+pydantic>=2.6
+
+# Phase 2 — classification (light) + embedding metrics (heavy: pulls PyTorch and
+# downloads models on first use). Storage moved to SQLite (stdlib, no dep).
+scikit-learn>=1.3
+sentence-transformers>=2.6
+bert-score>=0.3.13
+
+# Dev / test
+pytest>=7.4
+httpx>=0.27          # required by fastapi.testclient
