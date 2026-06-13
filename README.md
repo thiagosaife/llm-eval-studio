@@ -11,34 +11,17 @@ operational metrics + run comparison.
   Claude-based (judge / RAG / generation) metrics.
 - **Frontend** — Vue 3 + TypeScript (Vite, Pinia, Vue Router).
 
-## What works today (Phases 1–3)
+See [CHANGELOG.md](./CHANGELOG.md) for the full feature set, broken down by phase.
 
-- Build a dataset of test cases (input / prediction / reference / context);
-  **import CSV** (with column → field mapping) or JSON; persisted in your browser.
-- **Generate predictions live** from a Claude model (pick model, system prompt,
-  max tokens), or paste/import your own.
-- A metric picker that **explains each metric** ("read it" / "it lies when…")
-  and greys out metrics you can't run (no reference, missing library, or no API key).
-- Metrics:
-  - **Lexical** — Exact Match, ROUGE-1 / ROUGE-2 / ROUGE-L (pure Python).
-  - **Classification** — Accuracy, Precision, Recall, F1 (macro) + a **confusion
-    matrix**. Precision/Recall/F1 are set-level (summary cards only).
-  - **Semantic** — Cosine similarity (sentence-transformers) and BERTScore.
-  - **Model-based** — **LLM-as-a-judge** (configurable rubric, 1–5 → 0–1, with a
-    written rationale) and the **RAG triad** (faithfulness, answer relevancy,
-    context relevancy) — all via Claude.
-- A results dashboard: aggregate summary cards, a per-case table sortable by any
-  metric (defaults to worst-first), a confusion matrix, a **score-distribution
-  histogram**, **operational metrics** (p50/p95 latency, tokens, cost), a
-  **run-vs-run comparison**, and a case inspector with a **word-level diff** and
-  the judge's rationale per case.
-- Runs are persisted in **SQLite**, so a `/results/:id` link survives a restart.
+## Architecture
 
 The metric engine is a registry (`backend/app/metrics/`): adding a metric is
 "write one class, register it," and it appears in the UI automatically. Each
 metric exposes a `score()` (per-case) and an `aggregate()` hook (set-level
 metrics like precision override it); LLM-judged metrics implement `judge()`
-instead, returning a score + rationale + the call's cost.
+instead, returning a score + rationale + the call's cost. The frontend mirrors
+the backend's Pydantic models in `frontend/src/api/types.ts`, keeping the app
+type-safe end to end.
 
 ## Run it
 
