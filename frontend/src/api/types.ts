@@ -22,6 +22,9 @@ export interface MetricInfo {
   unavailable_reason?: string | null
   // Set-level metrics (precision/recall/F1): summary card only, no per-case column.
   aggregate_only: boolean
+  // RAG metrics need context; LLM-judge produces a written rationale.
+  requires_context: boolean
+  produces_rationale: boolean
 }
 
 export interface TestCase {
@@ -32,11 +35,17 @@ export interface TestCase {
   context?: string | null
 }
 
+export interface JudgeConfig {
+  model?: string | null
+  rubric?: string | null
+}
+
 export interface EvaluateRequest {
   metrics: string[]
   cases: TestCase[]
   dataset_id?: string | null
   dataset_name?: string | null
+  judge?: JudgeConfig | null
 }
 
 export interface CaseResult {
@@ -47,6 +56,56 @@ export interface CaseResult {
   context?: string | null
   // null means "not applicable" (rendered as a dash, never a zero).
   scores: Record<string, number | null>
+  // metricId -> the judge's written rationale (LLM-judge / RAG metrics).
+  rationales: Record<string, string>
+}
+
+export interface Operational {
+  latency_ms: number
+  tokens_in: number
+  tokens_out: number
+  cost: number
+}
+
+export interface OperationalSummary {
+  calls: number
+  latency_p50_ms: number
+  latency_p95_ms: number
+  tokens_in: number
+  tokens_out: number
+  cost: number
+}
+
+export interface ModelInfo {
+  id: string
+  name: string
+}
+
+export interface GenerateRequest {
+  cases: TestCase[]
+  model?: string | null
+  system?: string | null
+  max_tokens?: number
+}
+
+export interface GeneratedCase {
+  id: string
+  prediction: string
+  operational: Operational
+}
+
+export interface GenerateResponse {
+  model: string
+  cases: GeneratedCase[]
+  summary: OperationalSummary
+}
+
+export interface RunSummary {
+  run_id: string
+  created_at: string
+  dataset_name?: string | null
+  metrics: string[]
+  aggregate: Record<string, number | null>
 }
 
 export interface ConfusionMatrix {
@@ -62,4 +121,5 @@ export interface RunResponse {
   per_case: CaseResult[]
   aggregate: Record<string, number | null>
   confusion_matrix?: ConfusionMatrix | null
+  operational?: OperationalSummary | null
 }

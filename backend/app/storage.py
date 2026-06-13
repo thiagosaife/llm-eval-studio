@@ -10,13 +10,16 @@ per-call connections sidestep SQLite's single-thread rule without a global lock.
 """
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
-from .models import Dataset, RunResponse
+from .models import Dataset, RunResponse, RunSummary
 
-_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "eval.db"
+# Override with LLM_EVAL_DB (the test suite points this at a temp file so it
+# never writes to your real run history).
+_DB_PATH = Path(os.getenv("LLM_EVAL_DB") or Path(__file__).resolve().parent.parent / "data" / "eval.db")
 
 
 def _connect() -> sqlite3.Connection:
@@ -56,3 +59,24 @@ def get_run(run_id: str) -> Optional[RunResponse]:
     with _connect() as conn:
         row = conn.execute("SELECT data FROM runs WHERE id = ?", (run_id,)).fetchone()
     return RunResponse.model_validate_json(row[0]) if row else None
+
+
+def list_runs(limit: int = 50) -> List[RunSummary]:
+    """Recent runs, newest first — for the history list and run-vs-run comparison."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT data FROM runs ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    summaries: List[RunSummary] = []
+    for (data,) in rows:
+        run = RunResponse.model_validate_json(data)
+        summaries.append(
+            RunSummary(
+                run_id=run.run_id,
+                created_at=run.created_at,
+                dataset_name=run.dataset_name,
+                metrics=run.metrics,
+                aggregate=run.aggregate,
+            )
+        )
+    return summaries

@@ -5,6 +5,9 @@ import SummaryCards from '../components/SummaryCards.vue'
 import ResultsTable from '../components/ResultsTable.vue'
 import CaseInspector from '../components/CaseInspector.vue'
 import ConfusionMatrix from '../components/ConfusionMatrix.vue'
+import OperationalCard from '../components/OperationalCard.vue'
+import MetricChart from '../components/MetricChart.vue'
+import RunComparison from '../components/RunComparison.vue'
 import type { CaseResult, RunResponse } from '../api/types'
 import { ApiError } from '../api/client'
 import { useMetricsCatalogStore } from '../stores/metricsCatalog'
@@ -57,6 +60,7 @@ const selectedCase = computed<CaseResult | null>(
   () => run.value?.per_case.find((c) => c.id === selectedId.value) ?? null,
 )
 const confusion = computed(() => run.value?.confusion_matrix ?? null)
+const operational = computed(() => run.value?.operational ?? null)
 const createdLabel = computed(() => {
   if (!run.value) return ''
   const d = new Date(run.value.created_at)
@@ -94,8 +98,17 @@ watch(() => props.runId, load, { immediate: true })
         <SummaryCards :run="run" :metrics-by-id="catalog.byId" />
       </section>
 
+      <section v-if="operational" style="margin-bottom: 24px">
+        <OperationalCard :summary="operational" />
+      </section>
+
       <section v-if="confusion" style="margin-bottom: 24px">
         <ConfusionMatrix :data="confusion" />
+      </section>
+
+      <section class="insight-grid" style="margin-bottom: 24px">
+        <MetricChart :run="run" :metrics-by-id="catalog.byId" />
+        <RunComparison :current="run" :metrics-by-id="catalog.byId" />
       </section>
 
       <p class="muted small tip">
@@ -131,6 +144,12 @@ watch(() => props.runId, load, { immediate: true })
 .tip {
   margin: 0 0 14px;
 }
+.insight-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
 .layout {
   display: grid;
   grid-template-columns: 1.3fr 1fr;
@@ -138,6 +157,7 @@ watch(() => props.runId, load, { immediate: true })
   align-items: start;
 }
 @media (max-width: 960px) {
+  .insight-grid,
   .layout {
     grid-template-columns: 1fr;
   }

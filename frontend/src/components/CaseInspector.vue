@@ -85,6 +85,9 @@ function info(id: string): MetricInfo | undefined {
         <div class="score-meta">
           <strong>{{ info(id)?.name ?? id }}</strong>
           <span class="tiny muted">{{ info(id)?.how_to_read }}</span>
+          <p v-if="caseResult.rationales[id]" class="rationale tiny">
+            <span class="judge-tag">judge</span> {{ caseResult.rationales[id] }}
+          </p>
         </div>
       </div>
     </div>
@@ -165,6 +168,21 @@ function info(id: string): MetricInfo | undefined {
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+.rationale {
+  margin: 5px 0 0;
+  color: var(--c-text);
+  background: var(--c-surface-2);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+.judge-tag {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  color: var(--c-primary);
+  margin-right: 4px;
 }
 .empty {
   text-align: center;

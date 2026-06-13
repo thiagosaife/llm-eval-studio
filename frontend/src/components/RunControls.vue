@@ -65,7 +65,7 @@ async function launch() {
     </div>
 
     <p class="tiny muted gen-note">
-      Outputs are scored as pasted/imported. Live model generation is a Phase 3 feature.
+      Score pasted/imported outputs, or generate them live from the Model panel above.
     </p>
   </div>
 </template>

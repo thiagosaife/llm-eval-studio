@@ -35,6 +35,9 @@ class MetricInfo(BaseModel):
     # value, only an aggregate. Such metrics are shown as summary cards but
     # omitted from the per-case table.
     aggregate_only: bool = False
+    # RAG metrics need retrieved context; LLM-judge produces a written rationale.
+    requires_context: bool = False
+    produces_rationale: bool = False
 
 
 class TestCase(BaseModel):
@@ -58,6 +61,13 @@ class Dataset(BaseModel):
     cases: List[TestCase] = Field(default_factory=list)
 
 
+class JudgeConfig(BaseModel):
+    """Model + rubric for LLM-as-a-judge metrics (doc §3.4)."""
+
+    model: Optional[str] = None
+    rubric: Optional[str] = None
+
+
 class EvaluateRequest(BaseModel):
     """The main call (doc §5.5)."""
 
@@ -65,6 +75,16 @@ class EvaluateRequest(BaseModel):
     cases: List[TestCase]
     dataset_id: Optional[str] = None
     dataset_name: Optional[str] = None
+    judge: Optional[JudgeConfig] = None
+
+
+class Operational(BaseModel):
+    """Operational metrics for one LLM call (doc §3.6)."""
+
+    latency_ms: float
+    tokens_in: int
+    tokens_out: int
+    cost: float
 
 
 class CaseResult(BaseModel):
@@ -78,6 +98,8 @@ class CaseResult(BaseModel):
     # `None` means "not applicable" (e.g. a reference-based metric with no
     # reference). The frontend renders that as a dash, not a zero.
     scores: Dict[str, Optional[float]]
+    # metricId -> the judge's written explanation (LLM-judge / RAG metrics).
+    rationales: Dict[str, str] = Field(default_factory=dict)
 
 
 class ConfusionMatrix(BaseModel):
@@ -89,6 +111,18 @@ class ConfusionMatrix(BaseModel):
     matrix: List[List[int]]
 
 
+class OperationalSummary(BaseModel):
+    """Aggregate operational metrics across a run's LLM calls (doc §3.6).
+    The tail matters for UX, so we report p95 alongside the median."""
+
+    calls: int
+    latency_p50_ms: float
+    latency_p95_ms: float
+    tokens_in: int
+    tokens_out: int
+    cost: float
+
+
 class RunResponse(BaseModel):
     run_id: str
     created_at: str
@@ -98,3 +132,41 @@ class RunResponse(BaseModel):
     aggregate: Dict[str, Optional[float]]
     # Present only when a classification metric was run.
     confusion_matrix: Optional[ConfusionMatrix] = None
+    # Present only when an LLM-judged metric ran (judge calls cost money/time).
+    operational: Optional[OperationalSummary] = None
+
+
+class RunSummary(BaseModel):
+    """A run, minus the per-case detail — for the history list and comparisons."""
+
+    run_id: str
+    created_at: str
+    dataset_name: Optional[str] = None
+    metrics: List[str]
+    aggregate: Dict[str, Optional[float]]
+
+
+class ModelInfo(BaseModel):
+    id: str
+    name: str
+
+
+class GenerateRequest(BaseModel):
+    """Call an LLM live to produce outputs for the dataset (doc §5.3)."""
+
+    cases: List[TestCase]
+    model: Optional[str] = None
+    system: Optional[str] = None
+    max_tokens: int = 1024
+
+
+class GeneratedCase(BaseModel):
+    id: str
+    prediction: str
+    operational: Operational
+
+
+class GenerateResponse(BaseModel):
+    model: str
+    cases: List[GeneratedCase]
+    summary: OperationalSummary

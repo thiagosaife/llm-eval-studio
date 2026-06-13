@@ -17,9 +17,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from ..models import MetricInfo
+
+if TYPE_CHECKING:
+    from ..llm import Completion
+    from ..models import JudgeConfig, TestCase
 
 
 @dataclass
@@ -32,12 +36,25 @@ class Scored:
     value: Optional[float]
 
 
+@dataclass
+class MetricOutput:
+    """What an LLM/judge metric returns per case: a score, plus the judge's
+    written rationale and the cost of producing it (doc §7)."""
+
+    value: Optional[float]
+    rationale: Optional[str] = None
+    completion: Optional["Completion"] = None
+
+
 class BaseMetric(ABC):
     info: MetricInfo
     # Import names this metric needs to run. The registry checks them (without
     # importing the heavy library) to set `info.available`. Empty = always on.
     requires_modules: tuple = ()
     install_hint: Optional[str] = None
+    # LLM/judge metrics set this True: the engine routes them through
+    # `judge()` (which returns a rationale) instead of `score()`.
+    requires_llm: bool = False
 
     @abstractmethod
     def score(
@@ -52,6 +69,11 @@ class BaseMetric(ABC):
         calling (see app/api.py), so implementations can assume what they need.
         """
         ...
+
+    def judge(self, case: "TestCase", config: Optional["JudgeConfig"]) -> "MetricOutput":
+        """LLM-judged metrics override this to call the model and return a
+        score + rationale. Non-LLM metrics never reach it."""
+        raise NotImplementedError
 
     def aggregate(self, scored: List[Scored]) -> Optional[float]:
         """Summarise a run. Default: mean of the applicable per-case scores."""

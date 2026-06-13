@@ -13,11 +13,13 @@ from __future__ import annotations
 import importlib.util
 from typing import Dict, List
 
+from .. import llm
 from ..models import MetricInfo
 from .base import BaseMetric
 from .classification import Accuracy, F1Macro, PrecisionMacro, RecallMacro
 from .embeddings import BERTScore, CosineSimilarity
 from .exact_match import ExactMatch
+from .judge import AnswerRelevancy, ContextRelevancy, Faithfulness, LLMJudge
 from .rouge import Rouge1, Rouge2, RougeL
 
 _REGISTRY: Dict[str, BaseMetric] = {}
@@ -28,11 +30,17 @@ def _missing_modules(metric: BaseMetric) -> List[str]:
 
 
 def register(metric: BaseMetric) -> None:
-    missing = _missing_modules(metric)
-    if missing:
-        metric.info.available = False
-        hint = metric.install_hint or f"install: {', '.join(missing)}"
-        metric.info.unavailable_reason = f"Needs {', '.join(missing)} — {hint}"
+    if metric.requires_llm:
+        # Needs both the SDK and a credential — reflect whichever is missing.
+        metric.info.available = llm.available()
+        if not metric.info.available:
+            metric.info.unavailable_reason = llm.unavailable_reason()
+    else:
+        missing = _missing_modules(metric)
+        if missing:
+            metric.info.available = False
+            hint = metric.install_hint or f"install: {', '.join(missing)}"
+            metric.info.unavailable_reason = f"Needs {', '.join(missing)} — {hint}"
     _REGISTRY[metric.info.id] = metric
 
 
@@ -45,7 +53,7 @@ def all_infos() -> List[MetricInfo]:
 
 
 # Registration order is the display order in the picker: cheap/instant first,
-# then classification, then the heavier semantic metrics.
+# then classification, the heavier semantic metrics, then the LLM-judged ones.
 _DEFAULTS: List[BaseMetric] = [
     ExactMatch(),
     Rouge1(),
@@ -57,6 +65,10 @@ _DEFAULTS: List[BaseMetric] = [
     F1Macro(),
     CosineSimilarity(),
     BERTScore(),
+    LLMJudge(),
+    Faithfulness(),
+    AnswerRelevancy(),
+    ContextRelevancy(),
 ]
 for _m in _DEFAULTS:
     register(_m)

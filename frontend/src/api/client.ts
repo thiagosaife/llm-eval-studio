@@ -1,6 +1,14 @@
 // A thin, typed wrapper around fetch. Every response is parsed as its declared
 // interface, so callers get end-to-end types without sprinkling `any` around.
-import type { EvaluateRequest, MetricInfo, RunResponse } from './types'
+import type {
+  EvaluateRequest,
+  GenerateRequest,
+  GenerateResponse,
+  MetricInfo,
+  ModelInfo,
+  RunResponse,
+  RunSummary,
+} from './types'
 
 const BASE: string =
   (import.meta.env.VITE_API_BASE as string | undefined) ?? 'http://localhost:8000/api'
@@ -43,7 +51,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   listMetrics: () => request<MetricInfo[]>('/metrics'),
+  listModels: () => request<ModelInfo[]>('/models'),
   evaluate: (body: EvaluateRequest) =>
     request<RunResponse>('/evaluate', { method: 'POST', body: JSON.stringify(body) }),
+  generate: (body: GenerateRequest) =>
+    request<GenerateResponse>('/generate', { method: 'POST', body: JSON.stringify(body) }),
   getRun: (runId: string) => request<RunResponse>(`/runs/${encodeURIComponent(runId)}`),
+  listRuns: () => request<RunSummary[]>('/runs'),
 }

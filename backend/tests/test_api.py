@@ -1,9 +1,18 @@
 """End-to-end checks of the API contract the frontend depends on."""
 from fastapi.testclient import TestClient
 
+from app import llm
+from app.llm import Completion
 from app.main import app
+from app.metrics import registry
 
 client = TestClient(app)
+
+
+def _fake_completion(text: str) -> Completion:
+    return Completion(
+        text=text, model="claude-opus-4-8", latency_ms=123.4, tokens_in=50, tokens_out=10, cost=0.001
+    )
 
 
 def test_health():
@@ -123,3 +132,84 @@ def test_no_confusion_matrix_without_classification_metric():
         json={"metrics": ["rouge1"], "cases": [{"id": "1", "prediction": "a", "reference": "a"}]},
     )
     assert resp.json()["confusion_matrix"] is None
+
+
+# --- Phase 3: LLM-judge, RAG, live generation, operational ------------------
+
+
+def test_phase3_metrics_listed_with_flags():
+    by = {m["id"]: m for m in client.get("/api/metrics").json()}
+    assert {"llm_judge", "faithfulness", "answer_relevancy", "context_relevancy"} <= set(by)
+    assert by["llm_judge"]["family"] == "model_judge"
+    assert by["llm_judge"]["produces_rationale"] is True
+    assert by["faithfulness"]["family"] == "rag"
+    assert by["faithfulness"]["requires_context"] is True
+
+
+def test_models_endpoint():
+    models = client.get("/api/models").json()
+    assert any(m["id"] == "claude-opus-4-8" for m in models)
+
+
+def test_unavailable_llm_metric_rejected_without_key(monkeypatch):
+    # Force the registered judge metric to look unavailable, as it is with no key.
+    monkeypatch.setattr(registry.get("llm_judge").info, "available", False)
+    monkeypatch.setattr(registry.get("llm_judge").info, "unavailable_reason", "no key")
+    resp = client.post(
+        "/api/evaluate",
+        json={"metrics": ["llm_judge"], "cases": [{"id": "1", "prediction": "x"}]},
+    )
+    assert resp.status_code == 400
+    assert "unavailable" in resp.json()["detail"].lower()
+
+
+def test_llm_judge_via_mocked_provider(monkeypatch):
+    monkeypatch.setattr(registry.get("llm_judge").info, "available", True)
+    monkeypatch.setattr(
+        llm, "complete", lambda *a, **k: _fake_completion('{"score": 4, "rationale": "Solid."}')
+    )
+    resp = client.post(
+        "/api/evaluate",
+        json={
+            "metrics": ["llm_judge"],
+            "judge": {"rubric": "Rate correctness."},
+            "cases": [{"id": "1", "input": "Capital of France?", "prediction": "Paris"}],
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["per_case"][0]["scores"]["llm_judge"] == 0.8  # 4/5
+    assert body["per_case"][0]["rationales"]["llm_judge"] == "Solid."
+    # judge calls cost money/time → operational summary is attached
+    assert body["operational"]["calls"] == 1
+    assert body["operational"]["latency_p50_ms"] == 123.4
+
+
+def test_generate_via_mocked_provider(monkeypatch):
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "complete", lambda *a, **k: _fake_completion("Paris"))
+    resp = client.post(
+        "/api/generate",
+        json={"cases": [{"id": "1", "input": "Capital of France?"}], "model": "claude-opus-4-8"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["cases"][0]["prediction"] == "Paris"
+    assert body["cases"][0]["operational"]["tokens_out"] == 10
+    assert body["summary"]["calls"] == 1
+
+
+def test_generate_rejected_without_key(monkeypatch):
+    monkeypatch.setattr(llm, "available", lambda: False)
+    resp = client.post("/api/generate", json={"cases": [{"id": "1", "input": "hi"}]})
+    assert resp.status_code == 400
+
+
+def test_runs_list_returns_summaries():
+    client.post(
+        "/api/evaluate",
+        json={"metrics": ["rouge1"], "cases": [{"id": "1", "prediction": "a", "reference": "a"}]},
+    )
+    runs = client.get("/api/runs").json()
+    assert isinstance(runs, list) and len(runs) >= 1
+    assert {"run_id", "created_at", "metrics", "aggregate"} <= set(runs[0])
