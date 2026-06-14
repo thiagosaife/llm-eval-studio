@@ -1,10 +1,27 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useRunStore } from './stores/run'
 
 const route = useRoute()
+const router = useRouter()
 const runStore = useRunStore()
+
+// The "Metrics guide" button toggles: open the guide, or — when you're already
+// on it — return to wherever you were. We remember the last non-guide page so
+// the round-trip lands you back where you left off (falling back to /datasets).
+const onGuide = computed(() => route.name === 'guide')
+const returnTo = ref('/datasets')
+watch(
+  () => route.fullPath,
+  (path) => {
+    if (route.name !== 'guide') returnTo.value = path
+  },
+  { immediate: true },
+)
+function toggleGuide() {
+  router.push(onGuide.value ? returnTo.value : '/guide')
+}
 
 // The lifecycle stepper (doc §2.3): Dataset → Run → Results.
 const steps = [
@@ -53,6 +70,29 @@ const resultsTo = computed(() =>
           </span>
         </template>
       </nav>
+
+      <div class="top-tools">
+        <RouterLink
+          to="/explore"
+          class="guide-link"
+          :class="{ active: route.name === 'explore' }"
+          title="Embedding & dimensionality-reduction explorer"
+        >
+          <span aria-hidden="true">🔭</span>
+          <span>Explore</span>
+        </RouterLink>
+        <button
+          type="button"
+          class="guide-link"
+          :class="{ active: onGuide }"
+          :aria-pressed="onGuide"
+          :title="onGuide ? 'Close the guide and go back' : 'Open the metrics guide'"
+          @click="toggleGuide"
+        >
+          <span aria-hidden="true">📖</span>
+          <span>Metrics guide</span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -70,7 +110,7 @@ const resultsTo = computed(() =>
   z-index: 10;
 }
 .topbar-inner {
-  max-width: 1120px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 12px 24px;
   display: flex;
@@ -94,6 +134,31 @@ const resultsTo = computed(() =>
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.top-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.guide-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 550;
+  color: var(--c-text-soft);
+  border: 1px solid var(--c-border);
+}
+.guide-link:hover {
+  background: var(--c-surface-2);
+  color: var(--c-text);
+}
+.guide-link.active {
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+  border-color: #dcdcfb;
 }
 .stepper-arrow {
   color: var(--c-muted);
@@ -142,6 +207,9 @@ const resultsTo = computed(() =>
 }
 @media (max-width: 720px) {
   .step span:not(.step-num) {
+    display: none;
+  }
+  .guide-link span:last-child {
     display: none;
   }
 }

@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 
-from . import llm, storage
+from . import embeddings_util, llm, projection, storage
 from .llm import Completion
 from .metrics import registry
 from .metrics.base import BaseMetric, Scored
@@ -32,8 +32,15 @@ from .models import (
     ModelInfo,
     Operational,
     OperationalSummary,
+    ProjectedPoint,
+    ProjectionAlgorithmInfo,
+    ProjectionMeta,
+    ProjectionResult,
+    ProjectRequest,
+    ProjectResponse,
     RunResponse,
     RunSummary,
+    SampleDatasetInfo,
     TestCase,
 )
 
@@ -165,6 +172,120 @@ def get_run(run_id: str) -> RunResponse:
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
     return run
+
+
+# --- dimensionality-reduction explorer --------------------------------------
+
+
+@router.get("/projection/algorithms", response_model=List[ProjectionAlgorithmInfo])
+def list_projection_algorithms() -> List[ProjectionAlgorithmInfo]:
+    """DR algorithms + availability — drives the Explorer's picker (mirrors /metrics)."""
+    return [ProjectionAlgorithmInfo(**a) for a in projection.algorithm_infos()]
+
+
+@router.get("/projection/samples", response_model=List[SampleDatasetInfo])
+def list_projection_samples() -> List[SampleDatasetInfo]:
+    """Built-in high-dimensional datasets to practice DR on."""
+    return [SampleDatasetInfo(**s) for s in projection.sample_infos()]
+
+
+_FIELDS = ("input", "prediction", "reference", "context")
+
+
+@router.post("/project", response_model=ProjectResponse)
+def project(request: ProjectRequest) -> ProjectResponse:
+    """Embed (or load) vectors and project them to 2-D with each chosen algorithm."""
+    if not request.algorithms:
+        raise HTTPException(status_code=400, detail="Select at least one algorithm.")
+    for algo in request.algorithms:
+        if not projection.is_available(algo):
+            raise HTTPException(status_code=400, detail=f"Algorithm '{algo}' is unavailable.")
+
+    if request.source == "sample":
+        ids, vectors, labels, texts, label_kind = _sample_source(request)
+    elif request.source == "dataset":
+        ids, vectors, labels, texts, label_kind = _dataset_source(request)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown source '{request.source}'.")
+
+    results: List[ProjectionResult] = []
+    for algo in request.algorithms:
+        try:
+            coords, meta = projection.reduce(vectors, algo, request.params.get(algo, {}))
+        except Exception as exc:  # surface a clean message instead of a 500 traceback
+            raise HTTPException(status_code=500, detail=f"Projection failed ({algo}): {exc}") from exc
+        points = [
+            ProjectedPoint(
+                id=ids[i],
+                x=round(float(coords[i][0]), 4),
+                y=round(float(coords[i][1]), 4),
+                label=labels[i] if labels else None,
+                text=texts[i] if texts else None,
+            )
+            for i in range(len(ids))
+        ]
+        results.append(ProjectionResult(algorithm=algo, points=points, meta=ProjectionMeta(**meta)))
+
+    return ProjectResponse(
+        source=request.source,
+        n_points=len(ids),
+        dims_in=int(vectors.shape[1]),
+        label_kind=label_kind,
+        results=results,
+    )
+
+
+def _sample_source(request: ProjectRequest):
+    if not request.sample_id:
+        raise HTTPException(status_code=400, detail="Choose a sample dataset.")
+    try:
+        vectors, labels, _ = projection.load_sample(request.sample_id)
+    except KeyError:
+        raise HTTPException(status_code=400, detail=f"Unknown sample '{request.sample_id}'.")
+    ids = [str(i) for i in range(len(labels))]
+    return ids, vectors, labels, None, "category"
+
+
+def _dataset_source(request: ProjectRequest):
+    if not embeddings_util.available():
+        raise HTTPException(status_code=400, detail=embeddings_util.unavailable_reason())
+    field = request.field or "prediction"
+    if field not in _FIELDS:
+        raise HTTPException(status_code=400, detail=f"Field must be one of {_FIELDS}.")
+
+    rows = [(c, (getattr(c, field) or "").strip()) for c in request.cases]
+    rows = [(c, text) for c, text in rows if text]
+    if len(rows) < 3:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Need at least 3 cases with a non-empty '{field}' to project.",
+        )
+
+    ids = [c.id for c, _ in rows]
+    texts_full = [text for _, text in rows]
+    vectors = embeddings_util.embed_texts(texts_full)
+
+    # Color by the reference when it looks categorical (a few short, repeated
+    # labels); for free-form references coloring would be noise, so skip it.
+    refs = [(c.reference or "").strip() for c, _ in rows]
+    if _looks_categorical(refs):
+        labels = refs
+        label_kind = "category"
+    else:
+        labels = None
+        label_kind = "none"
+
+    previews = [t if len(t) <= 80 else t[:77] + "…" for t in texts_full]
+    return ids, vectors, labels, previews, label_kind
+
+
+def _looks_categorical(values: List[str]) -> bool:
+    """A reference column is a class label if every row has one, the values are
+    short, and there are only a handful of distinct ones."""
+    if not values or any(not v for v in values):
+        return False
+    distinct = set(values)
+    return 2 <= len(distinct) <= min(12, len(values) - 1) and all(len(v) <= 40 for v in values)
 
 
 # --- internals --------------------------------------------------------------

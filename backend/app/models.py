@@ -170,3 +170,86 @@ class GenerateResponse(BaseModel):
     model: str
     cases: List[GeneratedCase]
     summary: OperationalSummary
+
+
+# --- dimensionality-reduction explorer (doc: Explorer feature) --------------
+
+
+class ProjectionParamSpec(BaseModel):
+    """One tunable knob for a DR algorithm — drives a labelled slider in the UI."""
+
+    key: str
+    label: str
+    kind: str  # "int" | "float"
+    default: float
+    min: float
+    max: float
+    step: float
+    help: str
+
+
+class ProjectionAlgorithmInfo(BaseModel):
+    """Self-describing DR algorithm for the picker (mirrors MetricInfo's role)."""
+
+    id: str  # pca | tsne | umap
+    name: str
+    description: str
+    params: List[ProjectionParamSpec] = Field(default_factory=list)
+    available: bool = True
+    unavailable_reason: Optional[str] = None
+
+
+class SampleDatasetInfo(BaseModel):
+    """A built-in high-dimensional dataset to practice DR on."""
+
+    id: str
+    name: str
+    description: str
+    n_samples: int
+    n_features: int
+
+
+class ProjectRequest(BaseModel):
+    """Project vectors to 2-D. `source` picks where the vectors come from."""
+
+    source: str  # "dataset" (embed case text) | "sample" (built-in dataset)
+    algorithms: List[str]  # e.g. ["pca", "tsne", "umap"]
+    # source="dataset": which case field to embed, plus the cases.
+    field: Optional[str] = None  # input | prediction | reference | context
+    cases: List[TestCase] = Field(default_factory=list)
+    # source="sample": which built-in dataset.
+    sample_id: Optional[str] = None
+    # Per-algorithm params, e.g. {"tsne": {"perplexity": 30}}.
+    params: Dict[str, Dict[str, float]] = Field(default_factory=dict)
+
+
+class ProjectedPoint(BaseModel):
+    id: str
+    x: float
+    y: float
+    label: Optional[str] = None  # category for coloring (digit, species, ref label)
+    text: Optional[str] = None  # short preview for the hover tooltip
+
+
+class ProjectionMeta(BaseModel):
+    """Teaching signals from one reduction — all optional, algorithm-dependent."""
+
+    variance_explained: Optional[List[float]] = None  # PCA: ratio per component
+    perplexity: Optional[int] = None  # t-SNE (after clamping to data size)
+    n_neighbors: Optional[int] = None  # UMAP
+    min_dist: Optional[float] = None  # UMAP
+    preprocessed_dims: Optional[int] = None  # PCA-preprocess dims before t-SNE/UMAP
+
+
+class ProjectionResult(BaseModel):
+    algorithm: str
+    points: List[ProjectedPoint]
+    meta: ProjectionMeta = Field(default_factory=ProjectionMeta)
+
+
+class ProjectResponse(BaseModel):
+    source: str
+    n_points: int
+    dims_in: int
+    label_kind: str  # "category" | "none"
+    results: List[ProjectionResult]

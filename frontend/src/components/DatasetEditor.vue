@@ -1,12 +1,25 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import Papa from 'papaparse'
 import type { TestCase } from '../api/types'
+import InfoTip from './InfoTip.vue'
+import { glossaryTerm, termAnchor } from '../content/metricGuide'
 import { useDatasetStore } from '../stores/dataset'
 
 // Add/edit cases; import CSV or JSON and mark which column is input / reference
 // / context (doc §6.2).
 const store = useDatasetStore()
+
+// Each field carries an InfoTip whose hover text is the glossary definition and
+// whose link opens that glossary entry in the guide (self-teaching, doc §6.2).
+const router = useRouter()
+function fieldTip(slug: string): string {
+  return glossaryTerm(slug)?.definition ?? ''
+}
+function fieldHref(slug: string): string {
+  return router.resolve({ name: 'guide', hash: `#${termAnchor(slug)}` }).href
+}
 
 // --- JSON import -----------------------------------------------------------
 const showImport = ref(false)
@@ -120,7 +133,13 @@ function resetCsv() {
   <section>
     <div class="row spread wrap" style="margin-bottom: 16px; gap: 10px">
       <label class="field grow" style="max-width: 360px">
-        <span class="label">Dataset name</span>
+        <span class="label">
+          Dataset name
+          <InfoTip
+            text="A label for this evaluation. It appears on the results page so you can tell runs apart — it doesn't affect scoring."
+            label="What is the dataset name?"
+          />
+        </span>
         <input v-model="store.name" type="text" placeholder="Untitled dataset" />
       </label>
       <div class="row center wrap" style="gap: 8px">
@@ -206,7 +225,15 @@ function resetCsv() {
         </div>
 
         <label class="field" style="margin-bottom: 10px">
-          <span class="label">Input <span class="muted tiny">· the prompt / question</span></span>
+          <span class="label">
+            Input
+            <span class="muted tiny">· the prompt / question</span>
+            <InfoTip
+              :text="fieldTip('input')"
+              :href="fieldHref('input')"
+              label="What is the Input field?"
+            />
+          </span>
           <textarea v-model="c.input" rows="2" placeholder="What is the capital of France?"></textarea>
         </label>
 
@@ -214,13 +241,23 @@ function resetCsv() {
           <label class="field">
             <span class="label">
               Prediction <span class="muted tiny">· the LLM output (required to score)</span>
+              <InfoTip
+                :text="fieldTip('prediction')"
+                :href="fieldHref('prediction')"
+                label="What is the Prediction field?"
+              />
             </span>
             <textarea v-model="c.prediction" rows="3" placeholder="Paris"></textarea>
           </label>
           <label class="field">
             <span class="label">
               Reference
-              <span class="badge ref" style="margin-left: 4px">optional · gold answer</span>
+              <span class="badge ref">optional · gold answer</span>
+              <InfoTip
+                :text="fieldTip('reference')"
+                :href="fieldHref('reference')"
+                label="What is the Reference field?"
+              />
             </span>
             <textarea v-model="c.reference" rows="3" placeholder="Paris"></textarea>
           </label>
@@ -230,6 +267,11 @@ function resetCsv() {
           <span class="label">
             Context
             <span class="muted tiny">· retrieved docs, for RAG metrics (optional)</span>
+            <InfoTip
+              :text="fieldTip('context')"
+              :href="fieldHref('context')"
+              label="What is the Context field?"
+            />
           </span>
           <textarea v-model="c.context" rows="2" placeholder=""></textarea>
         </label>
@@ -253,6 +295,17 @@ function resetCsv() {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+/* Lay each field label out as a centered, single-line band so the title, its
+   hint/badge, and the "!" tip all share a baseline. The fixed min-height keeps
+   the Prediction and Reference textareas aligned even though only Reference
+   carries a taller badge. */
+.field .label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 26px;
 }
 .add-btn {
   margin-top: 14px;

@@ -6,8 +6,12 @@ import type {
   GenerateResponse,
   MetricInfo,
   ModelInfo,
+  ProjectionAlgorithmInfo,
+  ProjectRequest,
+  ProjectResponse,
   RunResponse,
   RunSummary,
+  SampleDatasetInfo,
 } from './types'
 
 const BASE: string =
@@ -58,4 +62,8 @@ export const api = {
     request<GenerateResponse>('/generate', { method: 'POST', body: JSON.stringify(body) }),
   getRun: (runId: string) => request<RunResponse>(`/runs/${encodeURIComponent(runId)}`),
   listRuns: () => request<RunSummary[]>('/runs'),
+  listProjectionAlgorithms: () => request<ProjectionAlgorithmInfo[]>('/projection/algorithms'),
+  listProjectionSamples: () => request<SampleDatasetInfo[]>('/projection/samples'),
+  project: (body: ProjectRequest) =>
+    request<ProjectResponse>('/project', { method: 'POST', body: JSON.stringify(body) }),
 }

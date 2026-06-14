@@ -123,3 +123,72 @@ export interface RunResponse {
   confusion_matrix?: ConfusionMatrix | null
   operational?: OperationalSummary | null
 }
+
+// --- dimensionality-reduction explorer (mirrors models.py) -----------------
+
+export interface ProjectionParamSpec {
+  key: string
+  label: string
+  kind: 'int' | 'float'
+  default: number
+  min: number
+  max: number
+  step: number
+  help: string
+}
+
+export interface ProjectionAlgorithmInfo {
+  id: string // pca | tsne | umap
+  name: string
+  description: string
+  params: ProjectionParamSpec[]
+  available: boolean
+  unavailable_reason?: string | null
+}
+
+export interface SampleDatasetInfo {
+  id: string
+  name: string
+  description: string
+  n_samples: number
+  n_features: number
+}
+
+export interface ProjectRequest {
+  source: 'dataset' | 'sample'
+  algorithms: string[]
+  field?: string | null // dataset source: which case field to embed
+  cases?: TestCase[]
+  sample_id?: string | null // sample source
+  params?: Record<string, Record<string, number>> // { tsne: { perplexity: 30 } }
+}
+
+export interface ProjectedPoint {
+  id: string
+  x: number
+  y: number
+  label?: string | null // category for coloring
+  text?: string | null // hover preview
+}
+
+export interface ProjectionMeta {
+  variance_explained?: number[] | null // PCA
+  perplexity?: number | null // t-SNE
+  n_neighbors?: number | null // UMAP
+  min_dist?: number | null // UMAP
+  preprocessed_dims?: number | null
+}
+
+export interface ProjectionResult {
+  algorithm: string
+  points: ProjectedPoint[]
+  meta: ProjectionMeta
+}
+
+export interface ProjectResponse {
+  source: string
+  n_points: number
+  dims_in: number
+  label_kind: 'category' | 'none'
+  results: ProjectionResult[]
+}

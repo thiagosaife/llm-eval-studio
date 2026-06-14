@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import type { MetricInfo } from '../api/types'
+import InfoTip from './InfoTip.vue'
+import { metricAnchor, metricTooltip } from '../content/metricGuide'
 import { familyLabel } from '../utils/format'
 
 // Lists metrics from GET /api/metrics. Each shows its description and a
@@ -12,6 +15,16 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ (e: 'toggle', id: string): void }>()
+
+const router = useRouter()
+
+// Each metric's "!" tip links to its entry on the metrics guide (new tab).
+function guideHref(id: string): string {
+  return router.resolve({ name: 'guide', hash: `#${metricAnchor(id)}` }).href
+}
+function tooltip(m: MetricInfo): string {
+  return metricTooltip(m.id, m.description)
+}
 
 function isSelected(id: string) {
   return props.selected.includes(id)
@@ -48,9 +61,16 @@ function onToggle(m: MetricInfo) {
       @keydown.space.prevent="onToggle(m)"
     >
       <div class="row spread center">
-        <div class="row center" style="gap: 9px">
+        <div class="row center title" style="gap: 9px">
           <span class="check" :class="{ on: isSelected(m.id) }" aria-hidden="true">✓</span>
-          <strong>{{ m.name }}</strong>
+          <strong>
+            {{ m.name }}
+            <InfoTip
+              :text="tooltip(m)"
+              :href="guideHref(m.id)"
+              :label="`What is ${m.name}? Open the guide`"
+            />
+          </strong>
         </div>
         <div class="row" style="gap: 5px">
           <span class="badge">{{ familyLabel(m.family) }}</span>
@@ -95,17 +115,28 @@ function onToggle(m: MetricInfo) {
   opacity: 0.6;
   background: var(--c-surface-2);
 }
+/* Keep the title group from forcing the checkbox to deform: the checkbox never
+   shrinks, and the title shrinks/wraps instead (it stays aligned to the first
+   line). */
+.title {
+  align-items: flex-start;
+}
 .check {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   width: 19px;
   height: 19px;
+  margin-top: 1px;
   border-radius: 5px;
   border: 1.5px solid var(--c-border-strong);
   color: transparent;
   font-size: 0.72rem;
   font-weight: 800;
+}
+.title strong {
+  min-width: 0;
 }
 .check.on {
   background: var(--c-primary);

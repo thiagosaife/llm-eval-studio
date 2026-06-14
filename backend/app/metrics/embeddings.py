@@ -25,7 +25,6 @@ def _clamp01(x: float) -> float:
 class CosineSimilarity(BaseMetric):
     requires_modules = ("sentence_transformers",)
     install_hint = "pip install sentence-transformers"
-    _model = None  # cached SentenceTransformer, loaded on first use
 
     info = MetricInfo(
         id="cosine",
@@ -38,14 +37,6 @@ class CosineSimilarity(BaseMetric):
         caveat="Coarser than BERTScore; fluent but wrong text can still sit close.",
     )
 
-    @classmethod
-    def _get_model(cls):
-        if cls._model is None:
-            from sentence_transformers import SentenceTransformer
-
-            cls._model = SentenceTransformer("all-MiniLM-L6-v2")
-        return cls._model
-
     def score(
         self,
         prediction: str,
@@ -54,10 +45,10 @@ class CosineSimilarity(BaseMetric):
     ) -> float:
         if not reference:
             return 0.0
-        model = self._get_model()
-        emb = model.encode(
-            [prediction, reference], normalize_embeddings=True, convert_to_numpy=True
-        )
+        # Shared model + lazy load with the projection explorer (embeddings_util).
+        from .. import embeddings_util
+
+        emb = embeddings_util.embed_texts([prediction, reference])
         return _clamp01(float(emb[0] @ emb[1]))
 
 

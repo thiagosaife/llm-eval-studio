@@ -13,6 +13,11 @@ bert-score>=0.3.13
 # Needs ANTHROPIC_API_KEY at runtime; the features are greyed out without it.
 anthropic>=0.45
 
+# Dimensionality-reduction explorer — PCA/t-SNE come from scikit-learn (above);
+# UMAP needs its own package (pulls numba/llvmlite/pynndescent). Greyed out in
+# the UI if absent.
+umap-learn>=0.5
+
 # Dev / test
 pytest>=7.4
 httpx>=0.27          # required by fastapi.testclient

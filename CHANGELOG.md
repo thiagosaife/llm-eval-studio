@@ -7,6 +7,55 @@ architecture is proven.
 
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+
+- **Embedding & dimensionality-reduction explorer** (`/explore`, **🔭 Explore** in
+  the top bar): project high-dimensional vectors to 2-D and compare **PCA / t-SNE
+  / UMAP** side-by-side with live params (perplexity, n_neighbors, min_dist). Two
+  data sources — your dataset's embeddings (a semantic map of cases, colored by a
+  categorical reference) and built-in sklearn demos (digits, iris). A teaching
+  feature: swap algorithms to *see* how each lays the same data out.
+  - Backend: `backend/app/projection.py` (DR engine + sample datasets) and
+    `backend/app/embeddings_util.py` (shared embedder, also used by Cosine);
+    endpoints `GET /api/projection/algorithms`, `GET /api/projection/samples`,
+    `POST /api/project`. PCA/t-SNE need no new deps; **UMAP adds `umap-learn`**
+    and is greyed out when absent.
+  - Frontend: `ExploreView.vue` + hand-rolled SVG `ScatterPlot.vue`, a
+    `projection` Pinia store, and DR teaching content (a "Dimensionality
+    reduction" guide section + glossary terms) in `metricGuide.ts`.
+- **Metrics & concepts guide** — a new `/guide` reference route explaining every
+  metric (what it measures, how it's computed, a worked example, when to use it,
+  and where it misleads), a **glossary** of the underlying concepts, and
+  **further-reading** links to the primary sources.
+- **Info tips (`!`)** throughout the app, making it self-teaching: each metric in
+  the Run picker now has a `!` button with a hover summary that links to its full
+  entry in the guide (opens in a new tab). The metric-specific teaching content
+  lives in `frontend/src/content/metricGuide.ts`.
+- **Per-field explanations** in the Dataset editor — Input, Prediction,
+  Reference, and Context each gained a `!` tip whose hover text is the glossary
+  definition and whose link opens that glossary entry.
+- Reusable **`InfoTip.vue`** component (hover/focus bubble, optional new-tab
+  link) and a **"Metrics guide" toggle** in the top bar — it opens the guide and,
+  when you're already on it, returns you to the page you came from. Router
+  `scrollBehavior` now honors `#metric-…` / `#term-…` anchors.
+
+### Changed
+
+- Widened the app shell (1120 → 1200px) so the metric picker's two-line titles
+  have room to breathe.
+
+### Fixed
+
+- **`!` tip alignment** — the tip now keeps a consistent margin from its text and
+  rides the text's vertical middle.
+- **Metric checkbox no longer deforms** when a card's title wraps to two lines
+  (the checkbox is fixed-size; the title shrinks/wraps instead).
+- **Prediction / Reference textareas now line up** in the Dataset editor — their
+  labels share a fixed-height band, so the taller "gold answer" badge on
+  Reference no longer pushes its field lower than Prediction's.
+
 ## Phase 3 — "Make it impressive" — 2026-06-13
 
 ### Added
