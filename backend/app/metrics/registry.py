@@ -35,12 +35,16 @@ def register(metric: BaseMetric) -> None:
         metric.info.available = llm.available()
         if not metric.info.available:
             metric.info.unavailable_reason = llm.unavailable_reason()
+        # A cost *estimate* only needs the SDK (it's free / can run offline), so a
+        # missing key leaves the metric estimable even though it isn't runnable.
+        metric.info.estimable = llm.sdk_installed()
     else:
         missing = _missing_modules(metric)
         if missing:
             metric.info.available = False
             hint = metric.install_hint or f"install: {', '.join(missing)}"
             metric.info.unavailable_reason = f"Needs {', '.join(missing)} — {hint}"
+        metric.info.estimable = metric.info.available
     _REGISTRY[metric.info.id] = metric
 
 

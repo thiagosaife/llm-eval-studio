@@ -23,11 +23,14 @@ from .models import (
     ConfusionMatrix,
     Dataset,
     DatasetCreate,
+    EstimateRequest,
+    EstimateResponse,
     EvaluateRequest,
     GeneratedCase,
     GenerateRequest,
     GenerateResponse,
     JudgeConfig,
+    MetricEstimate,
     MetricInfo,
     ModelInfo,
     Operational,
@@ -157,6 +160,63 @@ def evaluate(request: EvaluateRequest) -> RunResponse:
     )
     storage.save_run(run)
     return run
+
+
+@router.post("/estimate", response_model=EstimateResponse)
+def estimate(request: EstimateRequest) -> EstimateResponse:
+    """Project a run's tokens and cost before any billable call (doc §3.6).
+
+    Only LLM-judged metrics cost money; everything else is local and free. Input
+    tokens are exact when `exact` is set and a key is present (via the free
+    `count_tokens` endpoint), otherwise an offline heuristic — so an estimate is
+    available even before a key exists. Output tokens can't be known in advance,
+    so we report an expected size and a worst-case ceiling."""
+    metrics = _resolve_metrics_lenient(request.metrics)
+    model = (request.judge.model if request.judge and request.judge.model else None) or llm.DEFAULT_MODEL
+    exact = bool(request.exact and llm.available())
+
+    per_metric: List[MetricEstimate] = []
+    total_calls = 0
+    total_tokens_in = 0
+    for metric in metrics:
+        if not metric.requires_llm:
+            continue  # local metrics make no API calls
+        calls = 0
+        tokens_in = 0
+        for case in request.cases:
+            if not _applicable(metric, case):
+                continue
+            system, prompt = metric.preview_prompt(case, request.judge)
+            if exact:
+                try:
+                    n = llm.count_input_tokens(model, system, prompt)
+                except Exception:
+                    exact = False  # provider/auth hiccup — finish with the heuristic
+                    n = llm.estimate_input_tokens(system, prompt)
+            else:
+                n = llm.estimate_input_tokens(system, prompt)
+            calls += 1
+            tokens_in += n
+        if calls:
+            per_metric.append(
+                MetricEstimate(metric_id=metric.info.id, calls=calls, tokens_in=tokens_in)
+            )
+            total_calls += calls
+            total_tokens_in += tokens_in
+
+    expected_out = total_calls * llm.JUDGE_OUTPUT_TOKENS_EST
+    max_out = total_calls * llm.JUDGE_MAX_TOKENS
+    return EstimateResponse(
+        model=model,
+        llm_calls=total_calls,
+        tokens_in=total_tokens_in,
+        expected_tokens_out=expected_out,
+        max_tokens_out=max_out,
+        expected_cost=llm.cost(model, total_tokens_in, expected_out),
+        max_cost=llm.cost(model, total_tokens_in, max_out),
+        exact=exact and total_calls > 0,
+        per_metric=per_metric,
+    )
 
 
 @router.get("/runs", response_model=List[RunSummary])
@@ -302,6 +362,19 @@ def _resolve_metrics(metric_ids: List[str]) -> List[BaseMetric]:
                 status_code=400,
                 detail=f"Metric '{metric_id}' is unavailable: {metric.info.unavailable_reason}",
             )
+        resolved.append(metric)
+    return resolved
+
+
+def _resolve_metrics_lenient(metric_ids: List[str]) -> List[BaseMetric]:
+    """Like `_resolve_metrics`, but does NOT require availability — a key-gated
+    LLM metric is fine to *estimate* even when it can't yet be run. Unknown ids
+    still 400."""
+    resolved: List[BaseMetric] = []
+    for metric_id in metric_ids:
+        metric = registry.get(metric_id)
+        if metric is None:
+            raise HTTPException(status_code=400, detail=f"Unknown metric '{metric_id}'.")
         resolved.append(metric)
     return resolved
 

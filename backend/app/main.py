@@ -5,10 +5,23 @@ Interactive API docs (a learning aid, doc §5.1) live at /docs.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import router
+# Load backend/.env (e.g. ANTHROPIC_API_KEY) into the environment before anything
+# reads it, so `uvicorn app.main:app` just works without `--env-file`. Path is
+# resolved relative to this file so the cwd doesn't matter; existing env vars win
+# (load_dotenv does not override them). No-op if python-dotenv isn't installed.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:
+    pass
+
+from .api import router  # noqa: E402  (imported after .env is loaded above)
 
 app = FastAPI(
     title="LLM Eval Studio API",

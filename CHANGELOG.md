@@ -11,6 +11,37 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Pre-run cost & token estimator** — projects a run's cost *before* any billable
+  call, so you know what an LLM-judge run will cost before spending a cent. A new
+  **Cost estimate** card on the Run page shows the expected cost, a worst-case
+  ceiling (every judge reply hitting the token cap), the LLM call count, and input
+  tokens. It updates live as you pick metrics/cases using an offline heuristic (no
+  API key needed); a **Get exact count** button (🎯) swaps in exact input tokens
+  via Anthropic's `count_tokens` endpoint, which is **free** (it doesn't run the
+  model). A per-run **spend cap** (persisted) triggers a confirmation before a run
+  whose worst-case cost exceeds it.
+  - Backend: `POST /api/estimate` (`backend/app/api.py`); `estimate_input_tokens`
+    / `count_input_tokens` / `cost` + the `JUDGE_MAX_TOKENS` / `JUDGE_OUTPUT_TOKENS_EST`
+    constants in `backend/app/llm.py`; judge metrics expose `preview_prompt()` so
+    the estimate uses the identical prompt the real run sends. Only LLM-judge
+    metrics are billable; local metrics estimate as free.
+  - Frontend: `EstimateCard.vue`, an `estimate` action + `spendCap` in the run
+    store, and a confirm gate in `RunControls.vue`.
+  - LLM-judge metrics are now **selectable for an estimate even without an API
+    key** (they show a "needs key to run" badge); the run itself stays gated on the
+    key. New `MetricInfo.estimable` flag distinguishes "no key yet" (estimable)
+    from "SDK not installed" (not estimable).
+  - A `!` tip on the estimate card opens a new **"What costs money"** entry in the
+    guide: only LLM-judge and RAG metrics cost money (they call Claude once per
+    case); lexical, classification, and semantic metrics run locally and are free;
+    and scoring vs. live generation are separate billable steps.
+- **Scrollable results table** — the per-case table is now a fixed-height scroll
+  region (sticky header) with affordances that make it obvious there's more to
+  inspect: an always-visible scrollbar (macOS overlay scrollbars stay hidden
+  otherwise), soft edge fades, and up/down/left/right arrow buttons that appear
+  only when there's more content that way (`ResultsTable.vue`).
+- **Backend loads `backend/.env` at startup** (`python-dotenv`, in `app/main.py`),
+  so `uvicorn app.main:app` picks up `ANTHROPIC_API_KEY` without `--env-file`.
 - **Embedding & dimensionality-reduction explorer** (`/explore`, **🔭 Explore** in
   the top bar): project high-dimensional vectors to 2-D and compare **PCA / t-SNE
   / UMAP** side-by-side with live params (perplexity, n_neighbors, min_dist). Two

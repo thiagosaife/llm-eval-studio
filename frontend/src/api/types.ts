@@ -20,6 +20,9 @@ export interface MetricInfo {
   caveat: string
   available: boolean
   unavailable_reason?: string | null
+  // Selectable for a pre-run cost estimate even when not runnable now (e.g. an
+  // LLM metric with the SDK present but no API key).
+  estimable: boolean
   // Set-level metrics (precision/recall/F1): summary card only, no per-case column.
   aggregate_only: boolean
   // RAG metrics need context; LLM-judge produces a written rationale.
@@ -46,6 +49,34 @@ export interface EvaluateRequest {
   dataset_id?: string | null
   dataset_name?: string | null
   judge?: JudgeConfig | null
+}
+
+export interface EstimateRequest {
+  metrics: string[]
+  cases: TestCase[]
+  judge?: JudgeConfig | null
+  // Use the free count_tokens endpoint for exact input tokens (needs a key).
+  exact?: boolean
+}
+
+export interface MetricEstimate {
+  metric_id: string
+  calls: number
+  tokens_in: number
+}
+
+export interface EstimateResponse {
+  model: string
+  llm_calls: number
+  tokens_in: number
+  expected_tokens_out: number
+  max_tokens_out: number
+  expected_cost: number
+  // Worst-case ceiling (every judge reply hits the 1024-token cap).
+  max_cost: number
+  // True only when count_tokens produced the input counts (else heuristic).
+  exact: boolean
+  per_metric: MetricEstimate[]
 }
 
 export interface CaseResult {

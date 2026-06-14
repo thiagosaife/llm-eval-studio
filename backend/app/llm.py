@@ -34,10 +34,31 @@ PRICING: Dict[str, Tuple[float, float]] = {
     "claude-fable-5": (10.0, 50.0),
 }
 
+# Output cap per judge call, and the expected output size used for cost estimates.
+# A judge reply is a tiny `{"score", "rationale"}` JSON — far below the cap — so
+# the estimator reports both an expected cost (~JUDGE_OUTPUT_TOKENS_EST) and a
+# guaranteed worst-case ceiling (JUDGE_MAX_TOKENS).
+JUDGE_MAX_TOKENS = 1024
+JUDGE_OUTPUT_TOKENS_EST = 80
+
+# Offline token heuristic: ~4 chars/token, plus a little per-message overhead.
+_CHARS_PER_TOKEN = 4
+_MESSAGE_TOKEN_OVERHEAD = 8
+
+
+def sdk_installed() -> bool:
+    """True if the `anthropic` SDK is importable, regardless of credentials.
+
+    Lets the estimator (and the UI) tell "no API key yet" — where a cost
+    *estimate* is still possible — apart from "SDK not installed" — where it
+    isn't.
+    """
+    return importlib.util.find_spec("anthropic") is not None
+
 
 def available() -> bool:
     """True only if the SDK is importable AND a credential is present."""
-    if importlib.util.find_spec("anthropic") is None:
+    if not sdk_installed():
         return False
     return bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))
 
@@ -51,6 +72,35 @@ def unavailable_reason() -> str:
 def _cost(model: str, tokens_in: int, tokens_out: int) -> float:
     price_in, price_out = PRICING.get(model, PRICING[DEFAULT_MODEL])
     return round(tokens_in / 1e6 * price_in + tokens_out / 1e6 * price_out, 6)
+
+
+def cost(model: str, tokens_in: int, tokens_out: int) -> float:
+    """Public USD cost for an (input, output) token split — used by the estimator."""
+    return _cost(model, tokens_in, tokens_out)
+
+
+def estimate_input_tokens(system: str, prompt: str) -> int:
+    """Offline (~±15-20%) input-token estimate — no key, no network.
+
+    A deliberate char/token heuristic. NOT `tiktoken`, which is OpenAI's
+    tokenizer and undercounts Claude; use `count_input_tokens()` when you need
+    exact numbers.
+    """
+    chars = len(system or "") + len(prompt or "")
+    return (chars + _CHARS_PER_TOKEN - 1) // _CHARS_PER_TOKEN + _MESSAGE_TOKEN_OVERHEAD
+
+
+def count_input_tokens(model: str, system: Optional[str], prompt: str) -> int:
+    """Exact input-token count via Anthropic's `count_tokens` endpoint.
+
+    This is free — it does not run the model — but it does make an API call, so
+    it needs a credential. Call only when `available()` is True.
+    """
+    client = _get_client()
+    kwargs: dict = {"model": model, "messages": [{"role": "user", "content": prompt}]}
+    if system:
+        kwargs["system"] = system
+    return client.messages.count_tokens(**kwargs).input_tokens
 
 
 @dataclass
@@ -138,6 +188,6 @@ def _parse_judgment(text: str) -> Tuple[Optional[float], str]:
 
 
 def judge(system: str, prompt: str, model: str = DEFAULT_MODEL) -> Judgment:
-    completion = complete(prompt, model=model, system=system, max_tokens=1024)
+    completion = complete(prompt, model=model, system=system, max_tokens=JUDGE_MAX_TOKENS)
     score, rationale = _parse_judgment(completion.text)
     return Judgment(score=score, rationale=rationale, completion=completion)

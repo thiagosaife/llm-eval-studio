@@ -427,6 +427,25 @@ export const METRIC_GROUPS: MetricGroup[] = [
       'live, and shown on the results page — because an answer that is too slow or too expensive is not a good answer.',
     metrics: [
       {
+        id: 'cost-estimate',
+        name: 'What costs money',
+        family: 'operational',
+        range: 'US dollars · projected before a run',
+        guideOnly: true,
+        tooltip:
+          'Only LLM-judge and RAG metrics cost money — they call Claude once per case. Lexical, classification, and semantic metrics run locally and are free.',
+        explanation: [
+          'In the cost estimate, "cost" means money paid to Anthropic for tokens — and only metrics that actually call the Claude API spend tokens. Everything else runs on the backend itself, so it is $0 in API terms (it still uses your CPU, and embedding metrics download a model once).',
+          'Metrics that cost money ask a model to grade each case, one API request per case: LLM-as-a-judge, and the RAG triad — Faithfulness, Answer relevancy, and Context relevancy. These are the metrics marked "needs key to run", and the estimator counts all four.',
+          'Metrics that are free compute locally with no API call: the lexical metrics (Exact Match, ROUGE-1/2/L) compare surface words; the classification metrics (Accuracy, Precision, Recall, F1) run in scikit-learn; and the semantic metrics (Cosine similarity, BERTScore) run a local embedding model. That is why the estimate reads "this run is free" until you select a judge or RAG metric.',
+          'Two separate actions in the app are billable. Scoring with judge metrics is what the cost estimate projects (it assumes predictions already exist). Live generation — producing predictions from a model with the generate button in the Model panel — also calls Claude and costs tokens, but it is a separate step the estimator does not cover.',
+          'Rule of thumb: if a step asks a model to produce or grade text, it costs tokens; if it just compares strings or numbers you already have, it is free.',
+        ],
+        whenToUse:
+          'Read it before you run: reach for judge/RAG metrics when the task is open-ended enough to need them, and lean on the free lexical/classification/semantic metrics when a reference or label is enough. The estimate shows an expected cost and a worst-case ceiling so a run never surprises you.',
+        related: ['cost', 'tokens', 'operational', 'llm-as-judge', 'rag-triad'],
+      },
+      {
         id: 'latency',
         name: 'Latency',
         family: 'operational',

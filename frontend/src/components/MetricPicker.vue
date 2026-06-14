@@ -29,9 +29,11 @@ function tooltip(m: MetricInfo): string {
 function isSelected(id: string) {
   return props.selected.includes(id)
 }
-// Returns why a metric can't be picked, or null if it can.
+// Returns why a metric can't be picked, or null if it can. Key-gated LLM metrics
+// (estimable but not yet runnable) stay *selectable* so they can be estimated —
+// only a missing library (`!estimable`) or a missing reference blocks selection.
 function disabledReason(m: MetricInfo): string | null {
-  if (!m.available) return m.unavailable_reason ?? 'Not installed.'
+  if (!m.estimable) return m.unavailable_reason ?? 'Not installed.'
   if (m.requires_reference && !props.hasReference)
     return 'Add a reference to at least one case to enable this metric.'
   return null
@@ -75,7 +77,8 @@ function onToggle(m: MetricInfo) {
         <div class="row" style="gap: 5px">
           <span class="badge">{{ familyLabel(m.family) }}</span>
           <span v-if="m.requires_reference" class="badge ref">needs reference</span>
-          <span v-if="!m.available" class="badge ref">needs install</span>
+          <span v-if="!m.estimable" class="badge ref">needs install</span>
+          <span v-else-if="!m.available" class="badge ref">needs key to run</span>
         </div>
       </div>
 

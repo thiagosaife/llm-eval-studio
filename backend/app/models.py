@@ -31,6 +31,10 @@ class MetricInfo(BaseModel):
     # them out instead of letting a run fail.
     available: bool = True
     unavailable_reason: Optional[str] = None
+    # Selectable for a *pre-run cost estimate* even when not runnable right now.
+    # An LLM metric with the SDK installed but no API key is estimable (the
+    # estimate is free) but not available (the run needs the key).
+    estimable: bool = True
     # Precision/Recall/F1 are *set-level* — they have no meaningful per-case
     # value, only an aggregate. Such metrics are shown as summary cards but
     # omitted from the per-case table.
@@ -76,6 +80,43 @@ class EvaluateRequest(BaseModel):
     dataset_id: Optional[str] = None
     dataset_name: Optional[str] = None
     judge: Optional[JudgeConfig] = None
+
+
+class EstimateRequest(BaseModel):
+    """Project a run's token usage and cost before any billable call.
+
+    Same shape as EvaluateRequest's scoring inputs. `exact=True` asks the backend
+    to use Anthropic's free `count_tokens` endpoint (needs a key) for exact input
+    tokens; otherwise an offline heuristic is used (no key required)."""
+
+    metrics: List[str]
+    cases: List[TestCase]
+    judge: Optional[JudgeConfig] = None
+    exact: bool = False
+
+
+class MetricEstimate(BaseModel):
+    """Per-metric contribution to the estimate."""
+
+    metric_id: str
+    calls: int
+    tokens_in: int
+
+
+class EstimateResponse(BaseModel):
+    """Projected cost for a run. Output tokens can't be known in advance, so we
+    report an expected cost (small judge replies) and a worst-case ceiling (the
+    1024-token cap). `exact` is True only when `count_tokens` was used."""
+
+    model: str
+    llm_calls: int
+    tokens_in: int
+    expected_tokens_out: int
+    max_tokens_out: int
+    expected_cost: float
+    max_cost: float
+    exact: bool
+    per_metric: List[MetricEstimate] = Field(default_factory=list)
 
 
 class Operational(BaseModel):

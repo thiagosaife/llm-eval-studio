@@ -10,7 +10,7 @@ rationale + the call's cost) instead of `score()`.
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Tuple
 
 from .. import llm
 from ..models import JudgeConfig, MetricInfo, TestCase
@@ -39,10 +39,27 @@ class _LLMMetric(BaseMetric):
     def score(self, prediction, reference=None, context=None) -> float:  # type: ignore[override]
         raise NotImplementedError
 
-    def _run(self, criterion: str, prompt_body: str, config: Optional[JudgeConfig]) -> MetricOutput:
+    def _inputs(self, case: TestCase, config: Optional[JudgeConfig]) -> Tuple[str, str]:
+        """Build this metric's (criterion, prompt_body) for a case. Overridden."""
+        raise NotImplementedError
+
+    def _build(self, criterion: str, prompt_body: str) -> Tuple[str, str]:
+        """The exact (system, user_prompt) a judge call sends."""
+        return _JUDGE_SYSTEM, f"Criterion: {criterion}\n\n{prompt_body}Now grade it."
+
+    def preview_prompt(self, case: TestCase, config: Optional[JudgeConfig]) -> Tuple[str, str]:
+        """Reproduce (system, prompt) for a case WITHOUT calling the model.
+
+        The cost estimator uses this so its projection matches the real run's
+        prompt exactly — same single source of truth as judge() below.
+        """
+        criterion, prompt_body = self._inputs(case, config)
+        return self._build(criterion, prompt_body)
+
+    def judge(self, case: TestCase, config: Optional[JudgeConfig]) -> MetricOutput:
         model = (config.model if config and config.model else None) or llm.DEFAULT_MODEL
-        prompt = f"Criterion: {criterion}\n\n{prompt_body}Now grade it."
-        judgment = llm.judge(_JUDGE_SYSTEM, prompt, model=model)
+        system, prompt = self.preview_prompt(case, config)
+        judgment = llm.judge(system, prompt, model=model)
         return MetricOutput(
             value=judgment.score, rationale=judgment.rationale, completion=judgment.completion
         )
@@ -62,13 +79,13 @@ class LLMJudge(_LLMMetric):
     )
     DEFAULT_RUBRIC = "Rate the overall correctness, relevance, and quality of the answer."
 
-    def judge(self, case: TestCase, config: Optional[JudgeConfig]) -> MetricOutput:
+    def _inputs(self, case: TestCase, config: Optional[JudgeConfig]) -> Tuple[str, str]:
         rubric = (config.rubric if config and config.rubric else None) or self.DEFAULT_RUBRIC
         body = _field("Question / instruction", case.input)
         if case.reference:
             body += _field("Reference (ideal) answer", case.reference)
         body += _field("Answer to grade", case.prediction)
-        return self._run(rubric, body, config)
+        return rubric, body
 
 
 class Faithfulness(_LLMMetric):
@@ -85,13 +102,13 @@ class Faithfulness(_LLMMetric):
         produces_rationale=True,
     )
 
-    def judge(self, case: TestCase, config: Optional[JudgeConfig]) -> MetricOutput:
+    def _inputs(self, case: TestCase, config: Optional[JudgeConfig]) -> Tuple[str, str]:
         criterion = (
             "Is every claim in the answer supported by the retrieved context? "
             "Penalize anything stated that the context does not support (hallucination)."
         )
         body = _field("Retrieved context", case.context) + _field("Answer", case.prediction)
-        return self._run(criterion, body, config)
+        return criterion, body
 
 
 class AnswerRelevancy(_LLMMetric):
@@ -107,13 +124,13 @@ class AnswerRelevancy(_LLMMetric):
         produces_rationale=True,
     )
 
-    def judge(self, case: TestCase, config: Optional[JudgeConfig]) -> MetricOutput:
+    def _inputs(self, case: TestCase, config: Optional[JudgeConfig]) -> Tuple[str, str]:
         criterion = (
             "Does the answer directly and completely address the question asked? "
             "Penalize evasive, partial, or off-topic answers."
         )
         body = _field("Question", case.input) + _field("Answer", case.prediction)
-        return self._run(criterion, body, config)
+        return criterion, body
 
 
 class ContextRelevancy(_LLMMetric):
@@ -130,10 +147,10 @@ class ContextRelevancy(_LLMMetric):
         produces_rationale=True,
     )
 
-    def judge(self, case: TestCase, config: Optional[JudgeConfig]) -> MetricOutput:
+    def _inputs(self, case: TestCase, config: Optional[JudgeConfig]) -> Tuple[str, str]:
         criterion = (
             "Does the retrieved context contain the information needed to answer the question? "
             "Penalize context that is off-topic or missing the key facts."
         )
         body = _field("Question", case.input) + _field("Retrieved context", case.context)
-        return self._run(criterion, body, config)
+        return criterion, body

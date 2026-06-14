@@ -44,10 +44,14 @@ python3 -m venv .venv
 > are fast. The server boots instantly regardless — nothing heavy loads at
 > startup, and unavailable metrics are simply greyed out in the picker.
 >
-> **For live generation + LLM-judge + RAG metrics**, set `ANTHROPIC_API_KEY` in
-> the backend environment (e.g. `export ANTHROPIC_API_KEY=sk-ant-...` before
-> `uvicorn`). Without it, those features are greyed out and everything else still
-> works. The default model is `claude-opus-4-8`.
+> **For live generation + LLM-judge + RAG metrics**, provide an
+> `ANTHROPIC_API_KEY`: drop it in `backend/.env` (auto-loaded at startup — the
+> simplest option, no `--env-file` needed) or `export` it before `uvicorn`.
+> Without it, those features are greyed out and everything else still works; the
+> default model is `claude-opus-4-8`. The pre-run **cost estimate** still works
+> with no key (offline heuristic) — and with a key, "Get exact count" uses the
+> free `count_tokens` endpoint. Note Anthropic gates all API access (even
+> `count_tokens`) on a funded balance.
 >
 > The **Explorer** (`/api/projection/*`, `/api/project`) reduces vectors to 2-D
 > with PCA, t-SNE (both from scikit-learn), and UMAP (`umap-learn`). UMAP is
@@ -111,11 +115,11 @@ cd frontend && npm run build                    # type-check (vue-tsc) + bundle
 ```
 backend/
   app/
-    main.py            FastAPI app + CORS
-    api.py             endpoints + scoring loop + confusion matrix + operational + projection
+    main.py            FastAPI app + CORS (loads backend/.env at startup)
+    api.py             endpoints + scoring loop + confusion matrix + operational + estimate + projection
     models.py          Pydantic schemas (mirrored by frontend/src/api/types.ts)
     storage.py         SQLite-backed runs/datasets (LLM_EVAL_DB overridable)
-    llm.py             the one place that calls Claude (availability, pricing)
+    llm.py             the one place that calls Claude (availability, pricing, token/cost estimate)
     embeddings_util.py shared sentence-embedding helper (Cosine metric + Explorer)
     projection.py      DR engine: PCA/t-SNE/UMAP + built-in sample datasets
     metrics/           the metric engine: base, registry, and scorers — exact_match,
@@ -129,6 +133,7 @@ frontend/
     stores/            Pinia: dataset, run, metricsCatalog, projection
     views/             DatasetsView, RunView, ResultsView, GuideView, ExploreView
     components/        DatasetEditor, MetricPicker, ModelConfig, RunControls,
-                       SummaryCards, ResultsTable, CaseInspector, ConfusionMatrix,
-                       OperationalCard, MetricChart, RunComparison, InfoTip, ScatterPlot
+                       EstimateCard, SummaryCards, ResultsTable, CaseInspector,
+                       ConfusionMatrix, OperationalCard, MetricChart, RunComparison,
+                       InfoTip, ScatterPlot
 ```

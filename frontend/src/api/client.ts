@@ -1,6 +1,8 @@
 // A thin, typed wrapper around fetch. Every response is parsed as its declared
 // interface, so callers get end-to-end types without sprinkling `any` around.
 import type {
+  EstimateRequest,
+  EstimateResponse,
   EvaluateRequest,
   GenerateRequest,
   GenerateResponse,
@@ -58,6 +60,8 @@ export const api = {
   listModels: () => request<ModelInfo[]>('/models'),
   evaluate: (body: EvaluateRequest) =>
     request<RunResponse>('/evaluate', { method: 'POST', body: JSON.stringify(body) }),
+  estimate: (body: EstimateRequest) =>
+    request<EstimateResponse>('/estimate', { method: 'POST', body: JSON.stringify(body) }),
   generate: (body: GenerateRequest) =>
     request<GenerateResponse>('/generate', { method: 'POST', body: JSON.stringify(body) }),
   getRun: (runId: string) => request<RunResponse>(`/runs/${encodeURIComponent(runId)}`),

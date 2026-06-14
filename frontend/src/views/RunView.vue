@@ -3,6 +3,7 @@ import { onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import MetricPicker from '../components/MetricPicker.vue'
 import RunControls from '../components/RunControls.vue'
+import EstimateCard from '../components/EstimateCard.vue'
 import ModelConfig from '../components/ModelConfig.vue'
 import { useDatasetStore } from '../stores/dataset'
 import { useMetricsCatalogStore } from '../stores/metricsCatalog'
@@ -75,6 +76,7 @@ watch(
 
       <aside class="controls-col">
         <RunControls />
+        <EstimateCard />
       </aside>
     </div>
   </div>
@@ -101,6 +103,9 @@ watch(
 .controls-col {
   position: sticky;
   top: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 .rubric {
   margin-top: 14px;
