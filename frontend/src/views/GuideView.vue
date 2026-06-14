@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   FURTHER_READING,
@@ -17,11 +17,63 @@ import { useMetricsCatalogStore } from '../stores/metricsCatalog'
 // reflects the real backend.
 const catalog = useMetricsCatalogStore()
 
-onMounted(() => catalog.load())
-
 function info(id: string) {
   return catalog.byId[id]
 }
+
+// --- scroll-spy: highlight the TOC entry for the section you're reading ------
+const SECTION_IDS = [
+  ...METRIC_GROUPS.map((g) => `family-${g.family}`),
+  'glossary',
+  'reading',
+]
+const activeId = ref<string>(SECTION_IDS[0] ?? '')
+
+// The "current" line, measured live from the pinned chrome (top bar + the
+// sticky TOC) so it stays correct when the TOC wraps to two lines at full width
+// — a fixed value here would lag by one section. Matches the router's scroll
+// offset, so a clicked heading lands exactly on the active section.
+function currentLine(): number {
+  let px = 28 // small margin below the chrome
+  for (const sel of ['.topbar', '.toc']) {
+    const el = document.querySelector(sel)
+    if (el instanceof HTMLElement) px += el.offsetHeight
+  }
+  return px
+}
+
+let rafId = 0
+function recompute() {
+  rafId = 0
+  // A section is "current" once its top passes just below the sticky chrome.
+  // The last such section wins.
+  const threshold = currentLine()
+  let current = SECTION_IDS[0] ?? ''
+  for (const id of SECTION_IDS) {
+    const el = document.getElementById(id)
+    if (el && el.getBoundingClientRect().top - threshold <= 0) current = id
+  }
+  // At the very bottom of the page the last section can never reach the
+  // threshold, so pin it explicitly.
+  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+    current = SECTION_IDS[SECTION_IDS.length - 1] ?? current
+  }
+  activeId.value = current
+}
+function onScroll() {
+  if (!rafId) rafId = requestAnimationFrame(recompute)
+}
+
+onMounted(() => {
+  catalog.load()
+  window.addEventListener('scroll', onScroll, { passive: true })
+  window.addEventListener('resize', onScroll, { passive: true })
+  recompute()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', onScroll)
+  window.removeEventListener('resize', onScroll)
+})
 </script>
 
 <template>
@@ -44,11 +96,25 @@ function info(id: string) {
           :key="g.family"
           :to="{ name: 'guide', hash: `#family-${g.family}` }"
           class="toc-link"
+          :class="{ active: activeId === `family-${g.family}` }"
+          :aria-current="activeId === `family-${g.family}` ? 'true' : undefined"
         >
           {{ g.label }}
         </RouterLink>
-        <RouterLink :to="{ name: 'guide', hash: '#glossary' }" class="toc-link">Glossary</RouterLink>
-        <RouterLink :to="{ name: 'guide', hash: '#reading' }" class="toc-link">
+        <RouterLink
+          :to="{ name: 'guide', hash: '#glossary' }"
+          class="toc-link"
+          :class="{ active: activeId === 'glossary' }"
+          :aria-current="activeId === 'glossary' ? 'true' : undefined"
+        >
+          Glossary
+        </RouterLink>
+        <RouterLink
+          :to="{ name: 'guide', hash: '#reading' }"
+          class="toc-link"
+          :class="{ active: activeId === 'reading' }"
+          :aria-current="activeId === 'reading' ? 'true' : undefined"
+        >
           Further reading
         </RouterLink>
       </div>
@@ -157,9 +223,8 @@ function info(id: string) {
 </template>
 
 <style scoped>
-.guide {
-  max-width: 820px;
-}
+/* No local width cap — fill the shared .container (1200px) so the guide matches
+   the Datasets / Run / Results / Explore routes. */
 .page-head {
   margin-bottom: 20px;
 }
@@ -196,6 +261,19 @@ function info(id: string) {
 .toc-link {
   font-size: 0.88rem;
   font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--c-text-soft);
+  transition: background 0.12s, color 0.12s;
+}
+.toc-link:hover {
+  color: var(--c-primary);
+  background: var(--c-surface-2);
+}
+.toc-link.active {
+  color: var(--c-primary);
+  background: var(--c-primary-soft);
+  font-weight: 650;
 }
 
 .family {
