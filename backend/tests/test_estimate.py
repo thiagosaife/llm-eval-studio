@@ -71,8 +71,10 @@ def test_estimate_non_llm_metrics_are_free():
 
 
 def test_estimate_exact_path_uses_count_tokens(monkeypatch):
-    monkeypatch.setattr(llm, "available", lambda: True)
-    monkeypatch.setattr(llm, "count_input_tokens", lambda model, system, prompt: 100)
+    monkeypatch.setattr(llm, "available", lambda *a, **k: True)
+    monkeypatch.setattr(
+        llm, "count_input_tokens", lambda model, system, prompt, api_key=None: 100
+    )
     resp = client.post(
         "/api/estimate",
         json={
@@ -90,7 +92,7 @@ def test_estimate_exact_path_uses_count_tokens(monkeypatch):
 
 
 def test_estimate_exact_falls_back_on_provider_error(monkeypatch):
-    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "available", lambda *a, **k: True)
 
     def boom(*a, **k):
         raise RuntimeError("no creds")

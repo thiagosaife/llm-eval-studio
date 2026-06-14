@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
+import ModelSelect from './ModelSelect.vue'
 import { useDatasetStore } from '../stores/dataset'
-import { useMetricsCatalogStore } from '../stores/metricsCatalog'
+import { useProvidersStore } from '../stores/providers'
 import { useRunStore } from '../stores/run'
 
 // Optionally configure a model and generate outputs live (doc §6.1, §8.3).
+// Generation picks its own provider+model, independent of the judge model.
 const dataset = useDatasetStore()
-const catalog = useMetricsCatalogStore()
+const providers = useProvidersStore()
 const run = useRunStore()
 
 const promptCases = computed(() => dataset.cases.filter((c) => (c.input ?? '').trim() !== ''))
+// Generation is runnable only if the chosen generation model's provider has a key.
+const genReady = computed(() => providers.modelAvailable(run.genModel))
 const canGenerate = computed(
-  () => catalog.llmAvailable && promptCases.value.length > 0 && !run.generating,
+  () => genReady.value && promptCases.value.length > 0 && !run.generating,
 )
 
 async function generate() {
@@ -32,23 +36,22 @@ async function generate() {
 <template>
   <div class="card pad">
     <div class="row spread center" style="margin-bottom: 12px">
-      <h3>Model</h3>
-      <span class="badge" :class="catalog.llmAvailable ? 'primary' : ''">
-        {{ catalog.llmAvailable ? 'live generation ready' : 'no API key' }}
+      <h3>Generation model</h3>
+      <span class="badge" :class="genReady ? 'primary' : ''">
+        {{ genReady ? 'live generation ready' : 'no API key' }}
       </span>
     </div>
 
-    <div v-if="!catalog.llmAvailable" class="banner info small" style="margin-bottom: 12px">
-      {{ catalog.llmReason }} You can still paste outputs and use lexical, classification, and
-      embedding metrics.
+    <div v-if="!genReady" class="banner info small" style="margin-bottom: 12px">
+      The selected model's provider has no key.
+      <RouterLink to="/settings">Add an API key in Settings</RouterLink> to generate, or
+      paste outputs and use lexical, classification, and embedding metrics.
     </div>
 
     <div class="grid">
       <label class="field">
         <span class="label">Model</span>
-        <select v-model="run.model" class="select">
-          <option v-for="m in catalog.models" :key="m.id" :value="m.id">{{ m.name }}</option>
-        </select>
+        <ModelSelect v-model="run.genModel" />
       </label>
       <label class="field">
         <span class="label">Max tokens</span>
@@ -92,14 +95,7 @@ h3 {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 12px;
-}
-.select {
-  font: inherit;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--c-border-strong);
-  background: var(--c-surface);
+  align-items: start;
 }
 .gen-summary {
   border-top: 1px solid var(--c-border);

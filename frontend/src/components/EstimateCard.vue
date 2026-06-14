@@ -39,7 +39,7 @@ let timer: ReturnType<typeof setTimeout> | undefined
 const signature = computed(() =>
   JSON.stringify({
     m: run.selectedMetrics,
-    model: run.model,
+    model: run.judgeModel,
     rubric: run.rubric,
     cases: dataset.readyCases,
   }),

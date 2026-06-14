@@ -385,10 +385,10 @@ watch([source, sampleId, field], () => {
 .select {
   font: inherit;
   width: 100%;
-  padding: 8px 10px;
+  padding: 8px 32px 8px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--c-border-strong);
-  background: var(--c-surface);
+  background-color: var(--c-surface);
 }
 .chips {
   display: flex;

@@ -180,6 +180,31 @@ label.field > .label {
   margin-bottom: 4px;
 }
 
+/* ---- selects ---- */
+/* Replace the native dropdown arrow with a custom chevron inset from the right
+   edge, so it never crowds the border. Components keep their own padding/width
+   via `.select`; this rule owns the chevron + appearance. Note: a component must
+   use `background-color` (not the `background` shorthand) or it wipes this image. */
+select {
+  font: inherit;
+  color: var(--c-text);
+  background-color: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 32px 8px 10px;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23525c6b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+}
+select:focus {
+  outline: 2px solid var(--c-primary-soft);
+  border-color: var(--c-primary);
+}
+
 /* ---- badges & pills ---- */
 .badge {
   display: inline-flex;

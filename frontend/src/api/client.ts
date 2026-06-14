@@ -11,6 +11,7 @@ import type {
   ProjectionAlgorithmInfo,
   ProjectRequest,
   ProjectResponse,
+  ProviderInfo,
   RunResponse,
   RunSummary,
   SampleDatasetInfo,
@@ -58,6 +59,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   listMetrics: () => request<MetricInfo[]>('/metrics'),
   listModels: () => request<ModelInfo[]>('/models'),
+  listProviders: () => request<ProviderInfo[]>('/providers'),
   evaluate: (body: EvaluateRequest) =>
     request<RunResponse>('/evaluate', { method: 'POST', body: JSON.stringify(body) }),
   estimate: (body: EstimateRequest) =>

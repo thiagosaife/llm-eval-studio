@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 
-from . import embeddings_util, llm, projection, storage
+from . import embeddings_util, llm, projection, providers, storage
 from .llm import Completion
 from .metrics import registry
 from .metrics.base import BaseMetric, Scored
@@ -41,6 +41,7 @@ from .models import (
     ProjectionResult,
     ProjectRequest,
     ProjectResponse,
+    ProviderInfo,
     RunResponse,
     RunSummary,
     SampleDatasetInfo,
@@ -58,8 +59,30 @@ def list_metrics() -> List[MetricInfo]:
 
 @router.get("/models", response_model=List[ModelInfo])
 def list_models() -> List[ModelInfo]:
-    """Selectable generation/judge models for the run config (doc §6.1)."""
-    return [ModelInfo(id=mid, name=name) for mid, name in llm.MODELS]
+    """Every selectable generation/judge model across providers (doc §6.1)."""
+    return [
+        ModelInfo(id=mid, name=name, provider=pid) for mid, name, pid in providers.all_models()
+    ]
+
+
+@router.get("/providers", response_model=List[ProviderInfo])
+def list_providers() -> List[ProviderInfo]:
+    """Providers + their models + env availability — drives Settings and the
+    grouped model pickers (doc §6.1). `env_available` reflects the backend env
+    only; the UI ORs it with a browser-entered key."""
+    infos: List[ProviderInfo] = []
+    for prov in providers.all_providers():
+        infos.append(
+            ProviderInfo(
+                id=prov.id,
+                name=prov.name,
+                env_var=prov.env_vars[0] if prov.env_vars else "",
+                env_available=prov.available(),
+                sdk_installed=prov.sdk_installed(),
+                models=[ModelInfo(id=mid, name=name, provider=prov.id) for mid, name in prov.models],
+            )
+        )
+    return infos
 
 
 @router.post("/datasets", response_model=Dataset, status_code=201)
@@ -80,19 +103,24 @@ def get_dataset(dataset_id: str) -> Dataset:
 @router.post("/generate", response_model=GenerateResponse)
 def generate(request: GenerateRequest) -> GenerateResponse:
     """Call an LLM live to produce predictions for the dataset (doc §5.3, §8.3)."""
-    if not llm.available():
-        raise HTTPException(status_code=400, detail=llm.unavailable_reason())
+    model = request.model or llm.DEFAULT_MODEL
+    api_key = llm.key_for(model, request.keys)
+    if not llm.available(model, api_key):
+        raise HTTPException(status_code=400, detail=llm.unavailable_reason(model))
     prompts = [c for c in request.cases if (c.input or "").strip()]
     if not prompts:
         raise HTTPException(status_code=400, detail="No cases have an input to generate from.")
 
-    model = request.model or llm.DEFAULT_MODEL
     generated: List[GeneratedCase] = []
     completions: List[Completion] = []
     try:
         for case in prompts:
             completion = llm.complete(
-                case.input or "", model=model, system=request.system, max_tokens=request.max_tokens
+                case.input or "",
+                model=model,
+                system=request.system,
+                max_tokens=request.max_tokens,
+                api_key=api_key,
             )
             completions.append(completion)
             generated.append(
@@ -112,7 +140,9 @@ def evaluate(request: EvaluateRequest) -> RunResponse:
     if not request.cases:
         raise HTTPException(status_code=400, detail="Provide at least one case.")
 
-    selected = _resolve_metrics(request.metrics)
+    judge_model = (request.judge.model if request.judge and request.judge.model else None) or llm.DEFAULT_MODEL
+    judge_key = llm.key_for(judge_model, request.judge.keys if request.judge else None)
+    selected = _resolve_metrics(request.metrics, judge_model, judge_key)
     completions: List[Completion] = []  # every judge call, for the operational summary
 
     per_case: List[CaseResult] = []
@@ -173,7 +203,8 @@ def estimate(request: EstimateRequest) -> EstimateResponse:
     so we report an expected size and a worst-case ceiling."""
     metrics = _resolve_metrics_lenient(request.metrics)
     model = (request.judge.model if request.judge and request.judge.model else None) or llm.DEFAULT_MODEL
-    exact = bool(request.exact and llm.available())
+    api_key = llm.key_for(model, request.judge.keys if request.judge else None)
+    exact = bool(request.exact and llm.available(model, api_key))
 
     per_metric: List[MetricEstimate] = []
     total_calls = 0
@@ -189,7 +220,7 @@ def estimate(request: EstimateRequest) -> EstimateResponse:
             system, prompt = metric.preview_prompt(case, request.judge)
             if exact:
                 try:
-                    n = llm.count_input_tokens(model, system, prompt)
+                    n = llm.count_input_tokens(model, system, prompt, api_key=api_key)
                 except Exception:
                     exact = False  # provider/auth hiccup — finish with the heuristic
                     n = llm.estimate_input_tokens(system, prompt)
@@ -351,13 +382,24 @@ def _looks_categorical(values: List[str]) -> bool:
 # --- internals --------------------------------------------------------------
 
 
-def _resolve_metrics(metric_ids: List[str]) -> List[BaseMetric]:
+def _resolve_metrics(
+    metric_ids: List[str], judge_model: str, judge_key: Optional[str]
+) -> List[BaseMetric]:
+    """Resolve selected metrics, enforcing availability. LLM metrics are gated on
+    the *chosen judge model's* provider + the request key (so a browser-entered
+    key works without a restart); local metrics keep their static availability."""
     resolved: List[BaseMetric] = []
     for metric_id in metric_ids:
         metric = registry.get(metric_id)
         if metric is None:
             raise HTTPException(status_code=400, detail=f"Unknown metric '{metric_id}'.")
-        if not metric.info.available:
+        if metric.requires_llm:
+            if not llm.available(judge_model, judge_key):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Metric '{metric_id}' is unavailable: {llm.unavailable_reason(judge_model)}",
+                )
+        elif not metric.info.available:
             raise HTTPException(
                 status_code=400,
                 detail=f"Metric '{metric_id}' is unavailable: {metric.info.unavailable_reason}",

@@ -11,6 +11,36 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- **Multi-provider models (OpenAI + Gemini alongside Claude)** — the app now talks
+  to three providers, and you can switch models, bring your own API keys, and pick a
+  different model for each role.
+  - **Provider registry** (`backend/app/providers/`): one `Provider` subclass per
+    vendor — Anthropic (`anthropic`), OpenAI (`openai`, with offline `tiktoken`
+    counts), Google Gemini (`google-genai`). `app/llm.py` is now a thin facade that
+    routes by *model id* (`provider_for_model`), so `complete` / `judge` / `cost` /
+    `count_input_tokens` work for any provider. Each SDK is import-guarded and greys
+    out per provider when its key is missing.
+  - **Bring your own key**: a new **⚙️ Settings** page (`/settings`,
+    `views/SettingsView.vue`) takes a key per provider, stored in the browser
+    (`localStorage`, `stores/settings.ts`) and sent with each run. The backend uses a
+    request key over its own `.env` and never persists it; availability for a run is
+    decided from the *chosen model's* provider + key, so a browser-only key works
+    without a restart.
+  - **Separate generation vs judge models**: the Model panel picks the generation
+    provider+model; a **Judge model** picker (shown when an LLM/RAG metric is
+    selected) picks the grader — they can be different providers (e.g. generate with
+    GPT, judge with Claude). New reusable grouped `components/ModelSelect.vue`.
+  - Backend: `GET /api/providers` + a provider-tagged `GET /api/models`; optional
+    per-request `keys` on `JudgeConfig` / `GenerateRequest`; the estimator's exact
+    path works per provider (tiktoken locally for OpenAI, `count_tokens` for
+    Anthropic/Gemini). New deps `openai`, `tiktoken`, `google-genai`.
+  - Frontend: `stores/providers.ts` (catalog + effective availability),
+    `stores/settings.ts`, `genModel`/`judgeModel` in the run store; the guide gains a
+    **"Providers & API keys"** entry and its judge/RAG copy is now provider-neutral.
+  - UI polish: a single global `select` rule (`style.css`) gives **every dropdown a
+    custom chevron inset from the right edge** (instead of the native arrow crowding
+    the border); the Settings page uses the same full-width container as the other
+    routes.
 - **Pre-run cost & token estimator** — projects a run's cost *before* any billable
   call, so you know what an LLM-judge run will cost before spending a cent. A new
   **Cost estimate** card on the Run page shows the expected cost, a worst-case

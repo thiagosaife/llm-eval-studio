@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import MetricPicker from '../components/MetricPicker.vue'
+import ModelSelect from '../components/ModelSelect.vue'
 import RunControls from '../components/RunControls.vue'
 import EstimateCard from '../components/EstimateCard.vue'
 import ModelConfig from '../components/ModelConfig.vue'
@@ -14,6 +15,15 @@ const catalog = useMetricsCatalogStore()
 const run = useRunStore()
 
 onMounted(() => catalog.load())
+
+// The judge model + rubric only matter when an LLM-graded metric is selected
+// (LLM-as-a-judge or the RAG triad). All of those call the chosen judge model.
+const anyLlmSelected = computed(() =>
+  run.selectedMetrics.some((id) => {
+    const m = catalog.byId[id]
+    return !!m && (m.family === 'model_judge' || m.family === 'rag')
+  }),
+)
 
 // If references disappear (e.g. the user cleared them), drop any selected
 // reference-based metrics so we never launch a run that can't compute them.
@@ -59,17 +69,26 @@ watch(
             @toggle="run.toggleMetric"
           />
 
-          <div v-if="run.isSelected('llm_judge')" class="card pad rubric">
-            <div class="label">LLM-judge rubric</div>
-            <textarea
-              v-model="run.rubric"
-              rows="3"
-              placeholder="Rate the overall correctness, relevance, and quality of the answer."
-            ></textarea>
-            <p class="tiny muted" style="margin: 8px 0 0">
-              The judge grades each answer 1–5 against this rubric and explains why. Leave blank for
-              a sensible default.
+          <div v-if="anyLlmSelected" class="card pad rubric">
+            <div class="label">Judge model</div>
+            <ModelSelect v-model="run.judgeModel" />
+            <p class="tiny muted" style="margin: 6px 0 0">
+              The judge metrics (LLM-as-a-judge and the RAG triad) call this model to grade each
+              answer — it can be a different provider than generation.
             </p>
+
+            <template v-if="run.isSelected('llm_judge')">
+              <div class="label" style="margin-top: 14px">LLM-judge rubric</div>
+              <textarea
+                v-model="run.rubric"
+                rows="3"
+                placeholder="Rate the overall correctness, relevance, and quality of the answer."
+              ></textarea>
+              <p class="tiny muted" style="margin: 8px 0 0">
+                The judge grades each answer 1–5 against this rubric and explains why. Leave blank
+                for a sensible default.
+              </p>
+            </template>
           </div>
         </template>
       </section>

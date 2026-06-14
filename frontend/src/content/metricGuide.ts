@@ -324,7 +324,8 @@ export const METRIC_GROUPS: MetricGroup[] = [
     label: 'LLM judge',
     blurb:
       'Have a strong model grade each output against a rubric and explain itself. The most practical ' +
-      'approach for open-ended generation — and the closest to human judgment — but it carries its own biases. Requires an ANTHROPIC_API_KEY.',
+      'approach for open-ended generation — and the closest to human judgment — but it carries its own biases. ' +
+      'Pick the judge model (Claude, GPT, or Gemini) on the Run page; it needs an API key for that provider.',
     metrics: [
       {
         id: 'llm_judge',
@@ -332,7 +333,7 @@ export const METRIC_GROUPS: MetricGroup[] = [
         family: 'model_judge',
         range: '0 – 1 (from a 1–5 grade)',
         tooltip:
-          'A strong Claude model grades the answer 1–5 against your rubric and writes a short rationale; the grade is normalized to 0–1.',
+          'A strong model (Claude, GPT, or Gemini) grades the answer 1–5 against your rubric and writes a short rationale; the grade is normalized to 0–1.',
         explanation: [
           'LLM-as-a-judge asks a strong model to grade each output against a rubric you write, returning a 1–5 score plus a one- or two-sentence rationale. The score is normalized to 0–1 for display, and the rationale is shown per case so you can see why.',
           'It is the most practical metric for open-ended generation and the closest automated proxy for human judgment — but it inherits model biases: it can favor longer answers (verbosity bias), a particular option order (position bias), or its own style (self-preference). Spot-check it against human labels before trusting it at scale.',
@@ -358,7 +359,8 @@ export const METRIC_GROUPS: MetricGroup[] = [
     label: 'RAG',
     blurb:
       'For retrieval-augmented generation, separate the failure modes. The "RAG triad" — context relevancy, ' +
-      'faithfulness, and answer relevancy — tells you whether a problem is in retrieval or in generation. All require an ANTHROPIC_API_KEY.',
+      'faithfulness, and answer relevancy — tells you whether a problem is in retrieval or in generation. ' +
+      'All call the judge model you pick on the Run page and need that provider\'s API key.',
     metrics: [
       {
         id: 'faithfulness',
@@ -427,18 +429,36 @@ export const METRIC_GROUPS: MetricGroup[] = [
       'live, and shown on the results page — because an answer that is too slow or too expensive is not a good answer.',
     metrics: [
       {
+        id: 'providers',
+        name: 'Providers & API keys',
+        family: 'operational',
+        range: 'Anthropic · OpenAI · Gemini',
+        guideOnly: true,
+        tooltip:
+          'Generation and the judge each pick a provider+model (Claude, GPT, or Gemini). Add that provider\'s key on the Settings page; keys live in your browser and never persist on the server.',
+        explanation: [
+          'The app talks to three providers — Anthropic (Claude), OpenAI (GPT), and Google (Gemini). The model id tells the backend which provider to call, so you choose a provider just by choosing a model.',
+          'Two roles pick a model independently: live generation (the Model panel on the Run page) and the LLM-judge / RAG metrics (the "Judge model" picker that appears when you select one). You can generate with one provider and grade with another — e.g. generate with GPT, judge with Claude.',
+          'Keys come from two places. The backend reads them from its own .env as a default; the Settings page lets you paste a key per provider, stored in your browser and sent with each run. A browser key wins over the env key and unlocks that provider without restarting the backend. Because the keys live in localStorage, this is meant for local use, not a shared machine.',
+          'A model whose provider has no key is greyed out in the pickers with a "needs key" note. Pricing differs by provider and model, and the cost estimate uses the selected judge model\'s rates.',
+        ],
+        whenToUse:
+          'Set a key once on the Settings page, then mix and match models per run. Cheaper models (e.g. GPT-4o mini, Gemini Flash, Claude Haiku) are good for quick passes; reserve the strongest models for the final judge.',
+        related: ['llm-as-judge', 'tokens', 'cost'],
+      },
+      {
         id: 'cost-estimate',
         name: 'What costs money',
         family: 'operational',
         range: 'US dollars · projected before a run',
         guideOnly: true,
         tooltip:
-          'Only LLM-judge and RAG metrics cost money — they call Claude once per case. Lexical, classification, and semantic metrics run locally and are free.',
+          'Only LLM-judge and RAG metrics cost money — they call the judge model once per case. Lexical, classification, and semantic metrics run locally and are free.',
         explanation: [
-          'In the cost estimate, "cost" means money paid to Anthropic for tokens — and only metrics that actually call the Claude API spend tokens. Everything else runs on the backend itself, so it is $0 in API terms (it still uses your CPU, and embedding metrics download a model once).',
+          'In the cost estimate, "cost" means money paid to the model provider for tokens — and only metrics that actually call a provider API spend tokens. Everything else runs on the backend itself, so it is $0 in API terms (it still uses your CPU, and embedding metrics download a model once).',
           'Metrics that cost money ask a model to grade each case, one API request per case: LLM-as-a-judge, and the RAG triad — Faithfulness, Answer relevancy, and Context relevancy. These are the metrics marked "needs key to run", and the estimator counts all four.',
           'Metrics that are free compute locally with no API call: the lexical metrics (Exact Match, ROUGE-1/2/L) compare surface words; the classification metrics (Accuracy, Precision, Recall, F1) run in scikit-learn; and the semantic metrics (Cosine similarity, BERTScore) run a local embedding model. That is why the estimate reads "this run is free" until you select a judge or RAG metric.',
-          'Two separate actions in the app are billable. Scoring with judge metrics is what the cost estimate projects (it assumes predictions already exist). Live generation — producing predictions from a model with the generate button in the Model panel — also calls Claude and costs tokens, but it is a separate step the estimator does not cover.',
+          'Two separate actions in the app are billable. Scoring with judge metrics is what the cost estimate projects (it assumes predictions already exist). Live generation — producing predictions from a model with the generate button in the Model panel — also calls the provider and costs tokens, but it is a separate step the estimator does not cover.',
           'Rule of thumb: if a step asks a model to produce or grade text, it costs tokens; if it just compares strings or numbers you already have, it is free.',
         ],
         whenToUse:

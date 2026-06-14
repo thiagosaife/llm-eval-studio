@@ -148,13 +148,26 @@ def test_phase3_metrics_listed_with_flags():
 
 def test_models_endpoint():
     models = client.get("/api/models").json()
-    assert any(m["id"] == "claude-opus-4-8" for m in models)
+    # spans every provider, each model tagged with its provider
+    assert any(m["id"] == "claude-opus-4-8" and m["provider"] == "anthropic" for m in models)
+    assert any(m["provider"] == "openai" for m in models)
+    assert any(m["provider"] == "gemini" for m in models)
+
+
+def test_providers_endpoint():
+    providers = {p["id"]: p for p in client.get("/api/providers").json()}
+    assert {"anthropic", "openai", "gemini"} <= set(providers)
+    anthropic = providers["anthropic"]
+    assert set(anthropic) >= {"id", "name", "env_var", "env_available", "sdk_installed", "models"}
+    assert anthropic["env_var"] == "ANTHROPIC_API_KEY"
+    assert any(m["id"] == "claude-opus-4-8" for m in anthropic["models"])
+    assert providers["openai"]["env_var"] == "OPENAI_API_KEY"
+    assert providers["gemini"]["env_var"] == "GEMINI_API_KEY"
 
 
 def test_unavailable_llm_metric_rejected_without_key(monkeypatch):
-    # Force the registered judge metric to look unavailable, as it is with no key.
-    monkeypatch.setattr(registry.get("llm_judge").info, "available", False)
-    monkeypatch.setattr(registry.get("llm_judge").info, "unavailable_reason", "no key")
+    # No usable key for the judge model's provider → the run is rejected.
+    monkeypatch.setattr(llm, "available", lambda *a, **k: False)
     resp = client.post(
         "/api/evaluate",
         json={"metrics": ["llm_judge"], "cases": [{"id": "1", "prediction": "x"}]},
@@ -164,7 +177,7 @@ def test_unavailable_llm_metric_rejected_without_key(monkeypatch):
 
 
 def test_llm_judge_via_mocked_provider(monkeypatch):
-    monkeypatch.setattr(registry.get("llm_judge").info, "available", True)
+    monkeypatch.setattr(llm, "available", lambda *a, **k: True)
     monkeypatch.setattr(
         llm, "complete", lambda *a, **k: _fake_completion('{"score": 4, "rationale": "Solid."}')
     )
@@ -186,7 +199,7 @@ def test_llm_judge_via_mocked_provider(monkeypatch):
 
 
 def test_generate_via_mocked_provider(monkeypatch):
-    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "available", lambda *a, **k: True)
     monkeypatch.setattr(llm, "complete", lambda *a, **k: _fake_completion("Paris"))
     resp = client.post(
         "/api/generate",
@@ -199,8 +212,34 @@ def test_generate_via_mocked_provider(monkeypatch):
     assert body["summary"]["calls"] == 1
 
 
+def test_generate_with_openai_model_routes_to_its_provider(monkeypatch):
+    # Selecting a GPT model + supplying an OpenAI key (via the request) runs it;
+    # the model id alone tells the backend which provider to use.
+    seen = {}
+
+    def fake_complete(prompt, model=None, system=None, max_tokens=1024, api_key=None):
+        seen["model"] = model
+        seen["api_key"] = api_key
+        return _fake_completion("Madrid")
+
+    monkeypatch.setattr(llm, "available", lambda *a, **k: True)
+    monkeypatch.setattr(llm, "complete", fake_complete)
+    resp = client.post(
+        "/api/generate",
+        json={
+            "cases": [{"id": "1", "input": "Capital of Spain?"}],
+            "model": "gpt-5.1",
+            "keys": {"openai": "sk-test"},
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["cases"][0]["prediction"] == "Madrid"
+    assert seen["model"] == "gpt-5.1"
+    assert seen["api_key"] == "sk-test"  # request key threaded to the provider
+
+
 def test_generate_rejected_without_key(monkeypatch):
-    monkeypatch.setattr(llm, "available", lambda: False)
+    monkeypatch.setattr(llm, "available", lambda *a, **k: False)
     resp = client.post("/api/generate", json={"cases": [{"id": "1", "input": "hi"}]})
     assert resp.status_code == 400
 

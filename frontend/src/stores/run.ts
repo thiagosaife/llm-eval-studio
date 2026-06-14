@@ -8,6 +8,7 @@ import type {
   RunResponse,
   TestCase,
 } from '../api/types'
+import { useSettingsStore } from './settings'
 
 export type RunStatus = 'idle' | 'running' | 'done' | 'error'
 
@@ -21,13 +22,17 @@ function loadSpendCap(): number {
 
 /** Selected metrics, model config, run status, and the latest results (doc §6.3). */
 export const useRunStore = defineStore('run', () => {
+  const settings = useSettingsStore()
+
   const selectedMetrics = ref<string[]>([])
   const status = ref<RunStatus>('idle')
   const error = ref<string | null>(null)
   const currentRun = ref<RunResponse | null>(null)
 
-  // Model config — shared by live generation and the LLM-judge (doc §6.1).
-  const model = ref<string>('claude-opus-4-8')
+  // Model config — generation and the LLM-judge each pick their own provider+model
+  // (doc §6.1). Both default to Claude Opus; either can be any provider.
+  const genModel = ref<string>('claude-opus-4-8')
+  const judgeModel = ref<string>('claude-opus-4-8')
   const systemPrompt = ref<string>('')
   const maxTokens = ref<number>(1024)
   const rubric = ref<string>('')
@@ -65,7 +70,11 @@ export const useRunStore = defineStore('run', () => {
         metrics: selectedMetrics.value,
         cases,
         dataset_name: datasetName,
-        judge: { model: model.value, rubric: rubric.value.trim() || null },
+        judge: {
+          model: judgeModel.value,
+          rubric: rubric.value.trim() || null,
+          keys: settings.keysPayload(),
+        },
       })
       currentRun.value = result
       status.value = 'done'
@@ -84,9 +93,10 @@ export const useRunStore = defineStore('run', () => {
     try {
       const resp = await api.generate({
         cases,
-        model: model.value,
+        model: genModel.value,
         system: systemPrompt.value.trim() || null,
         max_tokens: maxTokens.value,
+        keys: settings.keysPayload(),
       })
       genSummary.value = resp.summary
       return resp
@@ -111,7 +121,11 @@ export const useRunStore = defineStore('run', () => {
       const result = await api.estimate({
         metrics: selectedMetrics.value,
         cases,
-        judge: { model: model.value, rubric: rubric.value.trim() || null },
+        judge: {
+          model: judgeModel.value,
+          rubric: rubric.value.trim() || null,
+          keys: settings.keysPayload(),
+        },
         exact,
       })
       estimateResult.value = result
@@ -137,7 +151,8 @@ export const useRunStore = defineStore('run', () => {
     status,
     error,
     currentRun,
-    model,
+    genModel,
+    judgeModel,
     systemPrompt,
     maxTokens,
     rubric,

@@ -8,7 +8,7 @@ metrics, import/persistence, and live generation + LLM-as-a-judge + RAG +
 operational metrics + run comparison.
 
 - **Backend** — Python / FastAPI; lexical, classification, embedding, and
-  Claude-based (judge / RAG / generation) metrics.
+  model-based (judge / RAG / generation) metrics via Anthropic, OpenAI, or Gemini.
 - **Frontend** — Vue 3 + TypeScript (Vite, Pinia, Vue Router).
 - **Self-teaching** — a built-in [metrics guide](#learn-as-you-go) explains every
   metric and the concepts behind them, and `!` tips throughout the app link
@@ -44,14 +44,18 @@ python3 -m venv .venv
 > are fast. The server boots instantly regardless — nothing heavy loads at
 > startup, and unavailable metrics are simply greyed out in the picker.
 >
-> **For live generation + LLM-judge + RAG metrics**, provide an
-> `ANTHROPIC_API_KEY`: drop it in `backend/.env` (auto-loaded at startup — the
-> simplest option, no `--env-file` needed) or `export` it before `uvicorn`.
-> Without it, those features are greyed out and everything else still works; the
-> default model is `claude-opus-4-8`. The pre-run **cost estimate** still works
-> with no key (offline heuristic) — and with a key, "Get exact count" uses the
-> free `count_tokens` endpoint. Note Anthropic gates all API access (even
-> `count_tokens`) on a funded balance.
+> **For live generation + LLM-judge + RAG metrics**, provide an API key for any
+> of the three providers — **Anthropic** (`ANTHROPIC_API_KEY`), **OpenAI**
+> (`OPENAI_API_KEY`), or **Google Gemini** (`GEMINI_API_KEY`). Drop keys in
+> `backend/.env` (auto-loaded at startup — no `--env-file` needed), or enter them
+> per-provider on the in-app **⚙️ Settings** page (stored in the browser, sent with
+> each run, never persisted server-side). Generation and the judge each pick their
+> own provider+model; a model whose provider has no key is greyed out. The default
+> model is `claude-opus-4-8`. Without any key, those features are greyed out and
+> everything else still works; the pre-run **cost estimate** still works with no key
+> (offline heuristic), and "Get exact count" uses each provider's exact counting
+> (local `tiktoken` for OpenAI; the free `count_tokens` endpoint for
+> Anthropic/Gemini — note Anthropic gates even `count_tokens` on a funded balance).
 >
 > The **Explorer** (`/api/projection/*`, `/api/project`) reduces vectors to 2-D
 > with PCA, t-SNE (both from scikit-learn), and UMAP (`umap-learn`). UMAP is
@@ -119,7 +123,8 @@ backend/
     api.py             endpoints + scoring loop + confusion matrix + operational + estimate + projection
     models.py          Pydantic schemas (mirrored by frontend/src/api/types.ts)
     storage.py         SQLite-backed runs/datasets (LLM_EVAL_DB overridable)
-    llm.py             the one place that calls Claude (availability, pricing, token/cost estimate)
+    llm.py             provider-aware facade (routes by model id; availability, pricing, token/cost)
+    providers/         one class per vendor — anthropic, openai, gemini + base/registry
     embeddings_util.py shared sentence-embedding helper (Cosine metric + Explorer)
     projection.py      DR engine: PCA/t-SNE/UMAP + built-in sample datasets
     metrics/           the metric engine: base, registry, and scorers — exact_match,
@@ -130,9 +135,9 @@ frontend/
   src/
     api/               typed client + types
     content/           metricGuide.ts — metric + DR explanations, glossary, links
-    stores/            Pinia: dataset, run, metricsCatalog, projection
-    views/             DatasetsView, RunView, ResultsView, GuideView, ExploreView
-    components/        DatasetEditor, MetricPicker, ModelConfig, RunControls,
+    stores/            Pinia: dataset, run, metricsCatalog, providers, settings, projection
+    views/             DatasetsView, RunView, ResultsView, GuideView, ExploreView, SettingsView
+    components/        DatasetEditor, MetricPicker, ModelConfig, ModelSelect, RunControls,
                        EstimateCard, SummaryCards, ResultsTable, CaseInspector,
                        ConfusionMatrix, OperationalCard, MetricChart, RunComparison,
                        InfoTip, ScatterPlot

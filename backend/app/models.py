@@ -66,10 +66,16 @@ class Dataset(BaseModel):
 
 
 class JudgeConfig(BaseModel):
-    """Model + rubric for LLM-as-a-judge metrics (doc §3.4)."""
+    """Model + rubric for LLM-as-a-judge metrics (doc §3.4).
+
+    `keys` is the UI's "bring your own key" map (provider_id -> API key). It's
+    optional and per-request; a key here wins over the backend env, and the
+    backend never persists it.
+    """
 
     model: Optional[str] = None
     rubric: Optional[str] = None
+    keys: Optional[Dict[str, str]] = None
 
 
 class EvaluateRequest(BaseModel):
@@ -190,6 +196,23 @@ class RunSummary(BaseModel):
 class ModelInfo(BaseModel):
     id: str
     name: str
+    provider: str = "anthropic"  # which provider owns this model
+
+
+class ProviderInfo(BaseModel):
+    """A selectable LLM provider + its models and availability (doc §6.1).
+
+    Drives the Settings page (key entry) and the grouped model pickers.
+    `env_available` reflects only the backend env — the frontend ORs it with a
+    browser-entered key to decide what the user can actually run.
+    """
+
+    id: str  # anthropic | openai | gemini
+    name: str
+    env_var: str  # the canonical env var name (shown as a hint)
+    env_available: bool  # a usable key is present in the backend environment
+    sdk_installed: bool  # the provider's SDK is importable
+    models: List[ModelInfo] = Field(default_factory=list)
 
 
 class GenerateRequest(BaseModel):
@@ -199,6 +222,8 @@ class GenerateRequest(BaseModel):
     model: Optional[str] = None
     system: Optional[str] = None
     max_tokens: int = 1024
+    # Per-request provider keys (provider_id -> key); env is the fallback.
+    keys: Optional[Dict[str, str]] = None
 
 
 class GeneratedCase(BaseModel):

@@ -338,10 +338,10 @@ function resetCsv() {
 }
 .map-row select {
   font: inherit;
-  padding: 6px 8px;
+  padding: 6px 30px 6px 8px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--c-border-strong);
-  background: var(--c-surface);
+  background-color: var(--c-surface);
 }
 .disabled-hint {
   color: var(--c-warn);

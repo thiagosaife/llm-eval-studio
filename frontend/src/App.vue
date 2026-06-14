@@ -92,6 +92,15 @@ const resultsTo = computed(() =>
           <span aria-hidden="true">📖</span>
           <span>Metrics guide</span>
         </button>
+        <RouterLink
+          to="/settings"
+          class="guide-link"
+          :class="{ active: route.name === 'settings' }"
+          title="API keys for Anthropic, OpenAI, and Gemini"
+        >
+          <span aria-hidden="true">⚙️</span>
+          <span>Settings</span>
+        </RouterLink>
       </div>
     </div>
   </header>

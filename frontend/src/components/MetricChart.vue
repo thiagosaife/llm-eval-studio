@@ -61,10 +61,10 @@ h3 {
 }
 .select {
   font: inherit;
-  padding: 5px 8px;
+  padding: 5px 30px 5px 8px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--c-border-strong);
-  background: var(--c-surface);
+  background-color: var(--c-surface);
 }
 .chart {
   display: flex;

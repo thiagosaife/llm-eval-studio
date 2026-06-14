@@ -31,8 +31,10 @@ def _field(label: str, value: Optional[str]) -> str:
 
 class _LLMMetric(BaseMetric):
     requires_llm = True
-    requires_modules = ("anthropic",)
-    install_hint = "set ANTHROPIC_API_KEY"
+    # Any provider satisfies an LLM metric — availability is decided per-run from
+    # the chosen judge model's provider, not a single SDK module here.
+    requires_modules = ()
+    install_hint = "add an API key for any provider"
 
     # Never called — the engine routes LLM metrics through judge() — but the
     # ABC requires a concrete score().
@@ -58,8 +60,9 @@ class _LLMMetric(BaseMetric):
 
     def judge(self, case: TestCase, config: Optional[JudgeConfig]) -> MetricOutput:
         model = (config.model if config and config.model else None) or llm.DEFAULT_MODEL
+        api_key = llm.key_for(model, config.keys if config else None)
         system, prompt = self.preview_prompt(case, config)
-        judgment = llm.judge(system, prompt, model=model)
+        judgment = llm.judge(system, prompt, model=model, api_key=api_key)
         return MetricOutput(
             value=judgment.score, rationale=judgment.rationale, completion=judgment.completion
         )
@@ -70,7 +73,7 @@ class LLMJudge(_LLMMetric):
         id="llm_judge",
         name="LLM-as-a-judge",
         family="model_judge",
-        description="A strong Claude model grades the output against your rubric and explains why.",
+        description="A strong model (Claude, GPT, or Gemini) grades the output against your rubric and explains why.",
         requires_reference=False,
         range=[0.0, 1.0],
         how_to_read="The most practical metric for open-ended generation; closest to human judgment.",

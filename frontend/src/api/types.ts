@@ -41,6 +41,9 @@ export interface TestCase {
 export interface JudgeConfig {
   model?: string | null
   rubric?: string | null
+  // "Bring your own key" map (provider id -> API key), sent per-request. A key
+  // here wins over the backend env; the backend never persists it.
+  keys?: Record<string, string> | null
 }
 
 export interface EvaluateRequest {
@@ -110,6 +113,16 @@ export interface OperationalSummary {
 export interface ModelInfo {
   id: string
   name: string
+  provider: string // which provider owns this model (anthropic | openai | gemini)
+}
+
+export interface ProviderInfo {
+  id: string // anthropic | openai | gemini
+  name: string
+  env_var: string // canonical env var name (shown as a hint in Settings)
+  env_available: boolean // a usable key is present in the backend env
+  sdk_installed: boolean // the provider's SDK is importable on the backend
+  models: ModelInfo[]
 }
 
 export interface GenerateRequest {
@@ -117,6 +130,8 @@ export interface GenerateRequest {
   model?: string | null
   system?: string | null
   max_tokens?: number
+  // Per-request provider keys (provider id -> key); env is the fallback.
+  keys?: Record<string, string> | null
 }
 
 export interface GeneratedCase {

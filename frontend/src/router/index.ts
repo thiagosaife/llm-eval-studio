@@ -68,6 +68,13 @@ export const router = createRouter({
       component: () => import('../views/ExploreView.vue'),
       meta: { label: 'Explore' },
     },
+    // Provider API keys (Anthropic / OpenAI / Gemini), stored in the browser.
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('../views/SettingsView.vue'),
+      meta: { label: 'Settings' },
+    },
   ],
   // Jump to #metric-… / #term-… anchors when the guide is opened via a tip;
   // restore the saved position on back/forward, else scroll to top.

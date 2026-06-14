@@ -9,10 +9,16 @@ scikit-learn>=1.3
 sentence-transformers>=2.6
 bert-score>=0.3.13
 
-# Phase 3 — live generation + LLM-as-a-judge + RAG metrics via Claude.
-# Needs ANTHROPIC_API_KEY at runtime; the features are greyed out without it.
+# Phase 3 — live generation + LLM-as-a-judge + RAG metrics. Multi-provider:
+# each SDK is import-guarded and its features grey out per provider without a key.
+# Anthropic / Claude (default provider).
 anthropic>=0.45
-# Loads backend/.env at startup so the key works without `--env-file` (app/main.py).
+# OpenAI / GPT. tiktoken gives exact OFFLINE token counts (no key) for estimates.
+openai>=1.40
+tiktoken>=0.7
+# Google / Gemini — the current unified SDK (`from google import genai`).
+google-genai>=0.3
+# Loads backend/.env at startup so keys work without `--env-file` (app/main.py).
 python-dotenv>=1.0
 
 # Dimensionality-reduction explorer — PCA/t-SNE come from scikit-learn (above);
