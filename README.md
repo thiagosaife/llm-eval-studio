@@ -7,6 +7,11 @@ Model (LLM) outputs and computes the metrics for them. This repo implements
 metrics, import/persistence, and live generation + LLM-as-a-judge + RAG +
 operational metrics + run comparison.
 
+![LLM Eval Studio — the Results view](docs/images/results.png)
+
+_The Results view: per-metric summary scores, a score-distribution chart, run
+comparison, and a sortable per-case table with a side-by-side case inspector._
+
 - **Backend** — Python / FastAPI; lexical, classification, embedding, and
   model-based (judge / RAG / generation) metrics via Anthropic, OpenAI, or Gemini.
 - **Frontend** — Vue 3 + TypeScript (Vite, Pinia, Vue Router).
@@ -74,6 +79,11 @@ Open http://localhost:5173, click **Load example** on the Datasets page, pick
 some metrics, and run. (The frontend talks to `http://localhost:8000/api` by
 default; override with `VITE_API_BASE` if needed.)
 
+![Picking metrics on the Run page](docs/images/run-metrics.png)
+
+_Picking metrics on the Run page — each metric carries a `!` tip, and the side
+panel shows a live cost estimate before you run._
+
 ## Learn as you go
 
 The app is built to teach, not just to score:
@@ -83,6 +93,12 @@ The app is built to teach, not just to score:
   worked example, when to use it, and where it misleads — plus a **glossary** of
   the underlying concepts and links to the primary sources. Live availability
   ("needs install" / "needs API key") reflects the running backend.
+
+  ![The built-in metrics guide](docs/images/metrics-guide.png)
+
+  _Every metric explained — how it's computed, a worked example, when to use it,
+  and where it misleads — plus a glossary of the underlying concepts._
+
 - **`!` tips** sit next to every metric in the Run picker and every field in the
   Dataset editor. Hover for a one-line explanation; click to open the full entry
   in the guide in a new tab.
@@ -90,6 +106,11 @@ The app is built to teach, not just to score:
   (or load a built-in demo like the 64-D digits) and project it to 2-D with
   **PCA, t-SNE, or UMAP** — compare them side-by-side and adjust their params
   (perplexity, n_neighbors, min_dist) to *see* how each algorithm behaves.
+
+  ![The Explorer projecting the digits sample to 2-D](docs/images/explorer.png)
+
+  _PCA, t-SNE, and UMAP side-by-side on the 64-D digits sample — see how each
+  algorithm lays the same data out._
 
 The teaching content lives in `frontend/src/content/metricGuide.ts` (the metric
 prose + glossary), kept separate from the backend's `MetricInfo` so it can stay
